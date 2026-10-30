@@ -66,8 +66,8 @@ jobs:
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: ./gradlew --no-daemon --max-workers=2 --console=plain testDebugUnitTest lintDebug assembleRelease
-      - name: Verify signed APK
-        run: '"$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk'
+      - name: Verify signed APK, identity and native packaging
+        run: python3 ../scripts/check_android_apk.py app/build/outputs/apk/release/app-release.apk --sdk "$ANDROID_HOME" --package be.arte.localdictate --version "${{ steps.version.outputs.name }}" --certificate-file ../scripts/android-signing-cert.sha256 --scratch "$RUNNER_TEMP" > "$RUNNER_TEMP/apk-verification.json"
       - name: Prepare release files
         env:
           VERSION_NAME: ${{ steps.version.outputs.name }}
