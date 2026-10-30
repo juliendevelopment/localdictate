@@ -16,7 +16,7 @@ from android_release_version import parse_tag
 def parse_badging(text):
     lines = text.splitlines()
     package = next((line for line in lines if line.startswith("package:")), "")
-    values = dict(re.findall(r"(name|versionCode|versionName)='([^']*)'", package))
+    values = dict(re.findall(r"(?:^|\s)(name|versionCode|versionName)='([^']*)'", package))
     def sdk(prefix):
         line = next((line for line in lines if line.startswith(prefix)), "")
         match = re.fullmatch(re.escape(prefix) + r"'([0-9]+)'", line)

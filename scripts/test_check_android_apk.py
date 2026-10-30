@@ -10,6 +10,11 @@ class ApkMetadataTest(unittest.TestCase):
         self.assertEqual("0.1.0", data["versionName"])
         self.assertEqual(100, data["versionCode"])
         self.assertFalse(data["debuggable"])
+    def test_real_aapt_codename_does_not_override_package(self):
+        real = "package: name='be.arte.localdictate' versionCode='100' versionName='0.1.0' platformBuildVersionName='15' platformBuildVersionCode='35' compileSdkVersion='35' compileSdkVersionCodename='15'\nsdkVersion:'29'\ntargetSdkVersion:'35'\n"
+        data = parse_badging(real)
+        self.assertEqual("be.arte.localdictate", data["package"])
+        self.assertEqual("0.1.0", data["versionName"])
     def test_debug_flag_detected(self):
         self.assertTrue(parse_badging(self.fixture + "application-debuggable\n")["debuggable"])
     def test_missing_or_preview_sdk_fails(self):
