@@ -8,6 +8,10 @@ le mainteneur demande de sauvegarder en commits pour confier la suite à un autr
 
 Dépôt privé : https://github.com/juliendevelopment/localdictate . Checkout canonique : `~/dev/sources/localdictate`.
 
+## Mise à jour — fusion de `work/dictation` (2026-10-30)
+
+`work/dictation` (insertion directe API33) est fusionnée dans `main` localement, sans conflit. Sur ce code réconcilié : **98 tests JVM/activité sans échec/erreur/ignoré**, `lintDebug`, `assembleDebug`, `assembleRelease` et 8 tests Python réussis. Non poussé, CI distante non vérifiée pour ce SHA, aucun APK signé publié. Revue de sécurité des points 1-4 ci-dessous toujours à faire (composition Gboard, vérification fraîche après vidage ASR). `work/meeting-core` reste à réconcilier.
+
 ## Branches à récupérer
 
 - **`main`** : socle Android/CI, première implémentation de dictée intégrée, signature Gradle optionnelle dédiée, version source `0.1.0` / code `100`, outillage de release et contrôle d’APK. La logique d’insertion de cette base utilise encore le presse-papiers : ne pas la publier comme solution finale.
