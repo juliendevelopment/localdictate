@@ -151,7 +151,7 @@ private fun HomeScreen(
                 SetupRow("Bulle au-dessus des apps", ready.overlay, overlay, "setup-overlay")
                 SetupRow("Notifications visibles", ready.notifications, notifications, "setup-notifications")
                 SetupRow("Insertion par accessibilité", ready.accessibility, { disclosure = true }, "setup-accessibility")
-                Text("En cas de cible modifiée, mot de passe ou champ incompatible : pas de collage automatique. Le texte reste récupérable ici. Une copie sensible remplace le contenu précédent du presse-papiers.")
+                Text("Insertion directe sans presse-papiers sur Android 13+ (API 33), avec Gboard conservé. Cible modifiée, composition ou éditeur incompatible : texte conservé et copie manuelle. Copier remplace le clip précédent ; le marquage sensible masque l’aperçu, sans protéger l’accès.")
             }
             if (state.transcript.isNotEmpty() || state.error != null) {
                 HorizontalDivider()

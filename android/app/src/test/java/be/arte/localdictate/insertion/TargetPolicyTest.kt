@@ -6,7 +6,7 @@ import org.junit.Test
 class TargetPolicyTest {
     private val own = "be.arte.localdictate"
     private val target = TargetState("notes", 7, "field", "EditText", TargetPolicy.hash("abc def"),
-        7, 3, 3, true, false, true, true)
+        7, 3, 3, true, false, true)
     @Test fun insertionAtCursorPreservesBothSides() {
         assertEquals("abc Bonjour def", TargetPolicy.insertedText("abc def", 3, 3, " Bonjour"))
         assertTrue(TargetPolicy.unchanged(target, target.copy(), own))
@@ -17,7 +17,7 @@ class TargetPolicyTest {
     }
     @Test fun passwordOwnAppAndUnsupportedTargetsAreRejected() {
         listOf(target.copy(password = true), target.copy(packageName = own), target.copy(editable = false),
-            target.copy(visible = false), target.copy(enabled = false), target.copy(focused = false), target.copy(pasteSupported = false), target.copy(start = -1),
+            target.copy(visible = false), target.copy(enabled = false), target.copy(focused = false), target.copy(start = -1),
             target.copy(end = 8), target.copy(start = 5, end = 3)).forEach {
             assertFalse(TargetPolicy.eligible(it, own))
         }
@@ -29,11 +29,13 @@ class TargetPolicyTest {
             assertFalse(TargetPolicy.unchanged(target, it, own))
         }
     }
-    @Test fun clipboardCleanupRequiresOwnershipOfBothTokenAndText() {
-        assertTrue(ClipboardOwnership.owns("token", "dictée", "token", "dictée", 1))
-        assertFalse(ClipboardOwnership.owns("token", "dictée", "user-copy", "dictée", 1))
-        assertFalse(ClipboardOwnership.owns("token", "dictée", "token", "autre texte", 1))
-        assertFalse(ClipboardOwnership.owns("token", "dictée", "token", "dictée", 2))
-        assertFalse(ClipboardOwnership.owns("token", "dictée", null, null, 0))
+    @Test fun directContextMustMatchTheEditorPackageTypeAndKnownViewId() {
+        val context = EditorSurrounding("abc def", 3, 3, 0, false)
+        val identity = EditorIdentity("notes", 7, "field", 1, "field")
+        assertTrue(DirectContextPolicy.matches(target.copy(inputType = 1), identity, context))
+        for (changed in listOf(identity.copy(packageName = "other"), identity.copy(inputType = 2),
+            identity.copy(viewId = "other"), identity.copy(inputType = 129))) {
+            assertFalse(DirectContextPolicy.matches(target.copy(inputType = 1), changed, context))
+        }
     }
 }
