@@ -1,0 +1,21 @@
+# Machine-local tooling and build output
+.gradle/
+.kotlin/
+**/build/
+local.properties
+.idea/
+*.iml
+.DS_Store
+# Signing material and credentials never belong here
+*.jks
+*.keystore
+*.p12
+.env
+.env.*
+# User recordings and downloaded models
+*.wav
+*.pcm
+*.m4a
+*.onnx
+*.gguf
+*.bin
