@@ -52,6 +52,11 @@ internal object Api33DirectEditor {
                     context.offset, composing)
             }
             override fun commit(text: String) = connection.commitText(text, 1, null)
+            override fun describe(): String {
+                val range = method.observed
+                return "courant=${isCurrent()} connu=${range.known} sélection=${range.start}-${range.end} " +
+                    "composition=${range.composingStart}-${range.composingEnd}"
+            }
         }
     }
 }

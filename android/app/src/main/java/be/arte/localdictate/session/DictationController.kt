@@ -108,7 +108,8 @@ class DictationController(private val app: Application) {
         val text = state.value.transcript
         if (text.isEmpty()) return
         runCatching { PrivateClipboard(app).put(text) }.onSuccess {
-            update { it.copy(message = "Texte copié comme contenu sensible. Collez-le vous-même et vérifiez les doublons.") }
+            update { it.copy(message = "Texte copié comme contenu sensible. Collez-le vous-même et vérifiez les doublons. Dernier résultat : " +
+                it.message.substringAfter("Dernier résultat : ").takeUnless { m -> m.startsWith("Texte copié") }.orEmpty()) }
         }.onFailure { update { state -> state.copy(error = "Copie refusée par Android. Transcription conservée ici.") } }
     }
 }

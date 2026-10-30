@@ -15,6 +15,8 @@ internal interface DirectEditorSession {
     /** Blocking, bounded IPC; called once on IO, only for the explicitly captured target. */
     fun surrounding(): EditorSurrounding?
     fun commit(text: String)
+    /** Non-content state of the editor, for refusal diagnostics. */
+    fun describe(): String = ""
 }
 
 internal data class EditorSurrounding(

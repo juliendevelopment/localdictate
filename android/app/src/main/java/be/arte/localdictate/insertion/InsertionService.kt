@@ -15,6 +15,7 @@ open class InsertionService : AccessibilityService() {
         var invalidated = false
         var attempted = false
         var dispatching = false
+        var cause = ""
     }
     private var target: Target? = null
     private val inserting = AtomicBoolean(false)
@@ -25,16 +26,18 @@ open class InsertionService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val captured = target ?: return
         if (event == null) return
+        // Our own bubble/app and the keyboard window change while dictating; they are not the target.
+        if (event.packageName?.toString() == packageName) return
         when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED, AccessibilityEvent.TYPE_WINDOWS_CHANGED,
-            AccessibilityEvent.TYPE_VIEW_FOCUSED -> captured.invalidated = true
+            AccessibilityEvent.TYPE_VIEW_FOCUSED -> { captured.invalidated = true; captured.cause = "événement ${event.eventType} de ${event.packageName}" }
             AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED, AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED -> {
                 if (event.windowId == captured.state.windowId) {
                     // Only callbacks from our target may be ignored after our single commit.
                     // Window/focus/editor changes still invalidate while waiting for observation.
                     // Node equality is not guaranteed across IPC, so same window and package while dispatching.
                     val ownCallback = captured.dispatching && event.packageName?.toString() == captured.state.packageName
-                    if (!ownCallback) captured.invalidated = true
+                    if (!ownCallback) { captured.invalidated = true; captured.cause = "texte/sélection modifiés par ${event.packageName}" }
                 }
             }
         }
@@ -102,20 +105,41 @@ open class InsertionService : AccessibilityService() {
     private fun unchanged(captured: Target): AccessibilityNodeInfo? = focused(captured)?.takeIf {
         TargetPolicy.unchanged(captured.state, state(it), packageName)
     }
+    /** Non-content explanation of why the captured target is no longer usable. */
+    private fun why(captured: Target): String {
+        if (target !== captured) return "cible remplacée"
+        if (captured.invalidated) return "invalidée : ${captured.cause.ifEmpty { "inconnue" }}"
+        if (connected !== this) return "service déconnecté"
+        if (!captured.editor.isCurrent()) return "éditeur périmé"
+        if (!captured.node.refresh()) return "champ disparu"
+        val focus = findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: return "plus de champ au focus"
+        val now = state(focus)
+        val old = captured.state
+        return when {
+            focus != captured.node -> "autre champ au focus"
+            now.packageName != old.packageName || now.windowId != old.windowId || now.viewId != old.viewId -> "autre fenêtre ou champ"
+            now.contentHash != old.contentHash || now.length != old.length -> "texte du champ modifié (${old.length}→${now.length} car.)"
+            now.start != old.start || now.end != old.end -> "curseur déplacé (${old.start}-${old.end}→${now.start}-${now.end})"
+            else -> "état du champ différent (focus=${now.focused} modifiable=${now.editable})"
+        }
+    }
     suspend fun insert(text: String): String = withContext(Dispatchers.Main.immediate) {
         if (!inserting.compareAndSet(false, true)) return@withContext "Insertion déjà en cours : aucun second envoi."
         val captured = target
         var requested = false
         try {
-            if (captured == null || captured.attempted || unchanged(captured) == null || text.isBlank())
-                return@withContext FALLBACK
+            if (captured == null) return@withContext "$FALLBACK (cible oubliée avant l’arrêt)"
+            if (captured.attempted) return@withContext "$FALLBACK (déjà tentée)"
+            if (text.isBlank()) return@withContext "$FALLBACK (texte vide)"
+            if (unchanged(captured) == null) return@withContext "$FALLBACK (${why(captured)})"
             captured.attempted = true
             // One potentially slow IPC on IO. No main-thread polling of surrounding text.
             val context = withContext(Dispatchers.IO) { captured.editor.surrounding() }
             if (!DirectContextPolicy.matches(captured.state, captured.editor.identity, context))
                 return@withContext "Éditeur non observable, texte en composition ou contexte incompatible : insertion annulée. Utilisez Copier."
-            if (unchanged(captured) == null || !captured.editor.canCommit(captured.state.start, captured.state.end))
-                return@withContext FALLBACK
+            if (unchanged(captured) == null) return@withContext "$FALLBACK (${why(captured)} après lecture)"
+            if (!captured.editor.canCommit(captured.state.start, captured.state.end))
+                return@withContext "$FALLBACK (éditeur : ${captured.editor.describe()}, champ ${captured.state.start}-${captured.state.end})"
             val expected = TargetPolicy.insertedText(checkNotNull(context).text, captured.state.start, captured.state.end, text)
             if (expected.length > DirectContextPolicy.MAX_FIELD_LENGTH)
                 return@withContext "Texte trop long pour une insertion vérifiable : transcription conservée, utilisez Copier."
