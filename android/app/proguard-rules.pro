@@ -1,2 +1,1 @@
-# No native inference integration in the foundation milestone.
-# Add verified JNI keep rules when a concrete runtime is integrated.
+-keep class com.k2fsa.sherpa.onnx.** { *; }

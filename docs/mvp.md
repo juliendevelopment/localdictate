@@ -20,6 +20,12 @@
 
 Les deux modes font partie de la cible ; la priorité d’implémentation est la dictée. Le résumé de réunion n’est pas retiré du périmètre ni déclaré déjà disponible.
 
+## Implémentation de cette lane
+
+La chaîne dictée réelle est raccordée : préparation Parakeet/Silero, service microphone armé depuis l’activité visible, bulle, capture/segmentation/reconnaissance, transcription privée et insertion sous conditions. La réunion reste indisponible. Les cases ci-dessous restent des critères **téléphone** : elles ne sont pas cochées par des fixtures JVM.
+
+Le collage automatique exige une cible inchangée et une preuve de propriété du clip sensible. Android peut interdire la relecture du clip à l’app sans focus : le code annule alors le collage et propose une copie manuelle depuis LocalDictate. Cette limite connue est explicitée dans [l’architecture](architecture.md), ainsi que la perte du son en RAM après mort du processus. La prochaine recette est dans [la checklist Pixel](acceptation-pixel.md).
+
 ## Acceptation dictée
 
 - [ ] Une bulle non focusable conserve la cible de saisie pendant le contrôle de l’enregistrement.
