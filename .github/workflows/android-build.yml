@@ -35,6 +35,8 @@ jobs:
         uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
         with:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+      - name: Validate release tooling
+        run: python3 -m unittest discover -s ../scripts -p 'test_*.py'
       - name: Test, lint and build APKs
         run: ./gradlew --no-daemon --max-workers=2 --console=plain testDebugUnitTest lintDebug assembleDebug assembleRelease
       - name: Checksum development APK
