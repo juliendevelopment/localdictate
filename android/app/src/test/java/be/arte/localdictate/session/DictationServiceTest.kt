@@ -43,8 +43,21 @@ class DictationServiceTest {
         assertFalse(microphone.exported)
         assertEquals(ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE, microphone.foregroundServiceType)
         val insertion = app.packageManager.getServiceInfo(ComponentName(app,
-            be.arte.localdictate.insertion.InsertionService::class.java), 0)
+            be.arte.localdictate.insertion.Api33InsertionService::class.java), 0)
         assertEquals("android.permission.BIND_ACCESSIBILITY_SERVICE", insertion.permission)
+        assertTrue(insertion.enabled)
+        val legacy = app.packageManager.getServiceInfo(ComponentName(app,
+            be.arte.localdictate.insertion.InsertionService::class.java), PackageManager.MATCH_DISABLED_COMPONENTS)
+        assertFalse(legacy.enabled)
+        val direct = Robolectric.buildService(be.arte.localdictate.insertion.Api33InsertionService::class.java).create()
+        assertTrue(direct.get().onCreateInputMethod() is be.arte.localdictate.insertion.GuardedInputMethod)
+        direct.destroy()
+        app.resources.getXml(be.arte.localdictate.R.xml.insertion_service).use { xml ->
+            while (xml.next() != org.xmlpull.v1.XmlPullParser.START_TAG) { }
+            val flags = xml.getAttributeIntValue("http://schemas.android.com/apk/res/android", "accessibilityFlags", 0)
+            assertTrue(flags and android.accessibilityservice.AccessibilityServiceInfo.FLAG_INPUT_METHOD_EDITOR != 0)
+            assertTrue(flags and android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS != 0)
+        }
         val application = app.packageManager.getApplicationInfo(app.packageName, PackageManager.GET_META_DATA)
         assertEquals(0, application.flags and android.content.pm.ApplicationInfo.FLAG_ALLOW_BACKUP)
     }

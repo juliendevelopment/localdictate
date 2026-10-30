@@ -1,0 +1,4 @@
+<resources>
+    <bool name="legacy_insertion_enabled">false</bool>
+    <bool name="direct_insertion_enabled">true</bool>
+</resources>

@@ -24,7 +24,7 @@ Les deux modes font partie de la cible ; la priorité d’implémentation est la
 
 La chaîne dictée réelle est raccordée : préparation Parakeet/Silero, service microphone armé depuis l’activité visible, bulle, capture/segmentation/reconnaissance, transcription privée et insertion sous conditions. La réunion reste indisponible. Les cases ci-dessous restent des critères **téléphone** : elles ne sont pas cochées par des fixtures JVM.
 
-Le collage automatique exige une cible inchangée et une preuve de propriété du clip sensible. Android peut interdire la relecture du clip à l’app sans focus : le code annule alors le collage et propose une copie manuelle depuis LocalDictate. Cette limite connue est explicitée dans [l’architecture](architecture.md), ainsi que la perte du son en RAM après mort du processus. La prochaine recette est dans [la checklist Pixel](acceptation-pixel.md).
+L’insertion automatique passe par la connexion d’édition d’accessibilité sur API 33+, sans presse-papiers ni remplacement de Gboard. Elle requiert une cible et une session inchangées, un contexte complet observable et aucune composition active ou inconnue. Sur API 29–32 ou un éditeur incompatible, le texte reste disponible pour copie manuelle explicite. Voir [l’architecture](architecture.md) et [la checklist Pixel](acceptation-pixel.md). Le son en RAM reste perdu après mort du processus.
 
 ## Acceptation dictée
 

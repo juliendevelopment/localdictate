@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.media.*
 import android.os.SystemClock
+import android.os.Build
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -45,7 +46,8 @@ internal class MicrophoneCapture(private val context: Context) {
                 val record = AudioRecord.Builder().setAudioSource(MediaRecorder.AudioSource.VOICE_RECOGNITION)
                     .setAudioFormat(AudioFormat.Builder().setSampleRate(RATE).setChannelMask(AudioFormat.CHANNEL_IN_MONO)
                         .setEncoding(AudioFormat.ENCODING_PCM_16BIT).build())
-                    .setBufferSizeInBytes(maxOf(minimum * 2, RATE / 2)).build()
+                    .setBufferSizeInBytes(maxOf(minimum * 2, RATE / 2))
+                    .apply { if (Build.VERSION.SDK_INT >= 30) setPrivacySensitive(true) }.build()
                 recorder = record
                 check(record.state == AudioRecord.STATE_INITIALIZED) { "Initialisation micro impossible." }
                 context.getSystemService(AudioManager::class.java).getDevices(AudioManager.GET_DEVICES_INPUTS)

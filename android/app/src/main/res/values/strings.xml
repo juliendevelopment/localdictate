@@ -1,4 +1,4 @@
 <resources>
     <string name="app_name">LocalDictate</string>
-    <string name="accessibility_description">Android donne un accès large au contenu des fenêtres. LocalDictate consulte uniquement le champ ciblé quand vous lancez une dictée, puis le revalide pour coller au curseur après arrêt. Aucun historique d’écran, aucune surveillance permanente, aucun champ de mot de passe. Le texte reste sur le téléphone. Vous pouvez désactiver ce service à tout moment.</string>
+    <string name="accessibility_description">Android donne un accès large au contenu des fenêtres. LocalDictate consulte uniquement le champ ciblé quand vous lancez une dictée, puis le revalide pour insérer directement au curseur après arrêt sur Android 13+, sans changer votre clavier ni toucher au presse-papiers. Si le champ est en composition ou incompatible, le texte reste disponible pour une copie manuelle explicite. Aucun historique d’écran, aucune surveillance permanente, aucun champ de mot de passe. Le texte reste sur le téléphone. Vous pouvez désactiver ce service à tout moment.</string>
 </resources>
