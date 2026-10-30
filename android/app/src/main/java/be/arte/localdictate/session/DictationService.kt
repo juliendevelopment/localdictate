@@ -100,6 +100,7 @@ class DictationService : Service() {
         }
         val targetService = InsertionService.connected
         val hasTarget = runCatching { targetService?.snapshot() == true }.getOrDefault(false)
+        val startRefusal = if (hasTarget) "" else targetService?.lastRefusal.orEmpty()
         val recorder = MicrophoneCapture(applicationContext)
         microphone = recorder
         controller.update { it.copy(phase = Phase.RECORDING, durationMs = 0, error = null,
@@ -143,7 +144,7 @@ class DictationService : Service() {
                 val message = when {
                     interrupted -> "Dictée interrompue ou surchargée : vérifiez le texte récupéré, aucun collage automatique."
                     record.text.isBlank() -> "Aucune parole reconnue. Vous pouvez réessayer."
-                    !hasTarget || targetService !== InsertionService.connected -> "Transcription conservée : accessibilité/cible indisponible. Utilisez Copier."
+                    !hasTarget || targetService !== InsertionService.connected -> "Transcription conservée : cible indisponible (${startRefusal.ifBlank { "service d’accessibilité non connecté" }}). Utilisez Copier."
                     else -> {
                         val claimed = withContext(Dispatchers.IO) { controller.journal.claimInsertion(sessionId) }
                         if (claimed) targetService!!.insert(record.text) else "Insertion déjà tentée ou interrompue : vérifiez le champ."

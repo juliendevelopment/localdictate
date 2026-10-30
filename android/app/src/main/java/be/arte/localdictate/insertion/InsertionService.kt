@@ -50,16 +50,32 @@ open class InsertionService : AccessibilityService() {
         forget()
         super.onDestroy()
     }
+    /** Non-content reason for the last refused snapshot, shown to the user to diagnose targets. */
+    @Volatile var lastRefusal: String = ""
+        private set
     fun snapshot(): Boolean {
-        if (inserting.get()) return false
+        lastRefusal = ""
+        if (inserting.get()) { lastRefusal = "insertion en cours"; return false }
         forget()
         // The active window can be our overlay; query input focus across interactive windows.
-        val node = findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: return false
-        if (!node.refresh()) return false
+        val node = findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+        if (node == null) { lastRefusal = "aucun champ au focus de saisie"; return false }
+        if (!node.refresh()) { lastRefusal = "champ non rafraîchissable"; return false }
         val state = state(node)
-        if (!TargetPolicy.eligible(state, packageName) || state.length > DirectContextPolicy.MAX_FIELD_LENGTH) return false
-        val editor = directEditor.acquire() ?: return false
-        if (!editor.isCurrent() || !DirectContextPolicy.sameEditor(state, editor.identity)) return false
+        if (!TargetPolicy.eligible(state, packageName) || state.length > DirectContextPolicy.MAX_FIELD_LENGTH) {
+            lastRefusal = "champ non éligible (modifiable=${state.editable} visible=${state.visible} " +
+                "actif=${state.enabled} mot de passe=${state.password} focus=${state.focused} " +
+                "sélection=${state.start}-${state.end}/${state.length})"
+            return false
+        }
+        val editor = directEditor.acquire()
+        if (editor == null) { lastRefusal = "éditeur direct indisponible (entrée de saisie non démarrée)"; return false }
+        if (!editor.isCurrent()) { lastRefusal = "éditeur direct périmé"; return false }
+        if (!DirectContextPolicy.sameEditor(state, editor.identity)) {
+            lastRefusal = "éditeur différent du champ (type champ=${state.inputType} éditeur=${editor.identity.inputType} " +
+                "id champ=${state.viewId} id éditeur=${editor.identity.viewId})"
+            return false
+        }
         target = Target(node, state, editor)
         return true
     }
