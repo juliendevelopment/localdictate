@@ -38,4 +38,12 @@ class TargetPolicyTest {
             assertFalse(DirectContextPolicy.matches(target.copy(inputType = 1), changed, context))
         }
     }
+    @Test fun editorMayAddFlagBitsButNotChangeClassOrVariation() {
+        // Values observed for Google Keep's note field: same class/variation, one extra editor flag.
+        val context = EditorSurrounding("", 0, 0, 0, false)
+        val keep = EditorIdentity("notes", 7, null, 2801665, null)
+        assertTrue(DirectContextPolicy.matches(target.copy(inputType = 704513, length = 0, start = 0, end = 0,
+            contentHash = TargetPolicy.hash("")), keep, context))
+        assertFalse(DirectContextPolicy.sameEditor(target.copy(inputType = 704513), keep.copy(inputType = 2801665 or 0x80)))
+    }
 }
