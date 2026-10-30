@@ -147,12 +147,12 @@ open class InsertionService : AccessibilityService() {
             captured.dispatching = true
             requested = true // commitText is void; an exception is also uncertain, never retried.
             captured.editor.commit(text)
-            // Read-only confirmation: never resend. Events from the target's own callbacks may have
-            // flagged the capture as invalidated, so observe the focused field directly.
+            // Read-only confirmation: never resend. The keyboard or the target app emit window/focus events
+            // after a commit, so the evidence is a fresh read of the focused field (same app and view id,
+            // exact expected text and cursor), not the invalidation flag.
             var seen = "aucun champ observé"
             repeat(6) {
                 delay(250)
-                if (captured.invalidated) return@withContext "$UNCERTAIN (fenêtre ou focus modifié)"
                 val node = findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
                 if (node != null && node.refresh() && node.packageName?.toString() == captured.state.packageName &&
                     node.viewIdResourceName == captured.state.viewId) {

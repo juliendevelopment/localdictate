@@ -221,22 +221,22 @@ class InsertionServiceTest {
         assertTrue(service.insert("Bonjour").contains("non confirmée"))
         assertEquals(2, editor.commits); noClipboardOrNodeAction()
     }
-    @Test fun windowChangeDuringVerificationCannotBeSuppressedByDispatching() = runTest(dispatcher) {
+    @Test fun windowEventDuringVerificationDoesNotHideAFreshMatchingRead() = runTest(dispatcher) {
         assertTrue(service.snapshot())
         editor.commitEffect = {
             editor.observe(it)
             service.onAccessibilityEvent(AccessibilityEvent.obtain(AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED))
         }
-        assertTrue(service.insert("Bonjour").contains("non confirmée"))
+        assertTrue(service.insert("Bonjour").contains("Insertion observée"))
         assertEquals(1, editor.commits)
     }
-    @Test fun focusChangeDuringVerificationCannotBeSuppressedByDispatching() = runTest(dispatcher) {
+    @Test fun focusEventDuringVerificationDoesNotHideAFreshMatchingRead() = runTest(dispatcher) {
         assertTrue(service.snapshot())
         editor.commitEffect = {
             editor.observe(it)
             service.onAccessibilityEvent(AccessibilityEvent.obtain(AccessibilityEvent.TYPE_VIEW_FOCUSED))
         }
-        assertTrue(service.insert("Bonjour").contains("non confirmée"))
+        assertTrue(service.insert("Bonjour").contains("Insertion observée"))
     }
     @Test fun doubleInvocationDuringReadOrVerificationCommitsOnceAndNeverRetries() = runTest(dispatcher) {
         assertTrue(service.snapshot())
