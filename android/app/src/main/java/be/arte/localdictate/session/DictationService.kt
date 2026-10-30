@@ -15,6 +15,7 @@ import be.arte.localdictate.R
 import be.arte.localdictate.asr.*
 import be.arte.localdictate.audio.MicrophoneCapture
 import be.arte.localdictate.insertion.InsertionService
+import be.arte.localdictate.insertion.PrivateClipboard
 import kotlinx.coroutines.*
 
 /** Created only from a resumed Activity; bubble actions call this existing service directly. */
@@ -150,11 +151,16 @@ class DictationService : Service() {
                         if (claimed) targetService!!.insert(record.text) else "Insertion déjà tentée ou interrompue : vérifiez le champ."
                     }
                 }
+                if (record.text.isNotBlank()) controller.remember(record.text)
                 if (message == InsertionService.OBSERVED) {
                     // Inserted and observed: nothing left to recover, so the next dictation can start.
                     withContext(NonCancellable + Dispatchers.IO) { controller.journal.clear() }
                     controller.update { it.copy(transcript = "", message = "Texte inséré dans le champ.") }
-                } else controller.update { it.copy(message = message) }
+                } else {
+                    // Not confirmed: copy automatically so the text can be pasted; it also stays in the history.
+                    val copied = record.text.isNotBlank() && runCatching { PrivateClipboard(applicationContext).put(record.text) }.isSuccess
+                    controller.update { it.copy(message = if (copied) "$message Texte copié dans le presse-papiers : collez-le (appui long)." else message) }
+                }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: OutOfMemoryError) { controller.update { it.copy(error = "Mémoire insuffisante, texte reconnu conservé.") } }
             catch (_: Throwable) { controller.update { it.copy(error = "Dictée interrompue : texte reconnu conservé, copie manuelle disponible.") } }

@@ -262,8 +262,15 @@ class InsertionServiceTest {
     }
     @Test fun windowChangeBeforeCommitPermanentlyInvalidatesTarget() = runTest(dispatcher) {
         assertTrue(service.snapshot())
-        service.onAccessibilityEvent(AccessibilityEvent.obtain(AccessibilityEvent.TYPE_WINDOWS_CHANGED))
+        service.onAccessibilityEvent(AccessibilityEvent.obtain(AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED))
         service.insert("Bonjour"); assertEquals(0, editor.commits)
+    }
+    @Test fun genericWindowsChangedEventsAloneDoNotCancelAnUnchangedTarget() = runTest(dispatcher) {
+        // Keyboard and overlay windows change during a long dictation; the field itself is re-verified.
+        assertTrue(service.snapshot())
+        service.onAccessibilityEvent(AccessibilityEvent.obtain(AccessibilityEvent.TYPE_WINDOWS_CHANGED))
+        assertTrue(service.insert("Bonjour").contains("Insertion observée"))
+        assertEquals(1, editor.commits)
     }
 }
 

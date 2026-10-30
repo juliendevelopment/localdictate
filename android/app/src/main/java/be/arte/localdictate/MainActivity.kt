@@ -63,7 +63,8 @@ class MainActivity : ComponentActivity() {
                     overlay = { openSettings(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, packageUri = true) },
                     accessibility = { openSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS) },
                     arm = ::arm, stop = { controller.service?.stopCapture() },
-                    disarm = { controller.service?.disarm() }, copy = model.controller::copy, clear = model.controller::clear)
+                    disarm = { controller.service?.disarm() }, copy = model.controller::copy, clear = model.controller::clear,
+                    copyText = model.controller::copyText, clearHistory = model.controller::clearHistory)
             }
         }
     }
@@ -99,6 +100,7 @@ private fun HomeScreen(
     state: DictationState, ready: Readiness, prepare: () -> Unit, cancel: () -> Unit,
     microphone: () -> Unit, notifications: () -> Unit, overlay: () -> Unit, accessibility: () -> Unit,
     arm: () -> Unit, stop: () -> Unit, disarm: () -> Unit, copy: () -> Unit, clear: () -> Unit,
+    copyText: (String) -> Unit, clearHistory: () -> Unit,
 ) {
     var meeting by rememberSaveable { mutableStateOf(false) }
     var disclosure by rememberSaveable { mutableStateOf(false) }
@@ -151,7 +153,7 @@ private fun HomeScreen(
                 SetupRow("Bulle au-dessus des apps", ready.overlay, overlay, "setup-overlay")
                 SetupRow("Notifications visibles", ready.notifications, notifications, "setup-notifications")
                 SetupRow("Insertion par accessibilité", ready.accessibility, { disclosure = true }, "setup-accessibility")
-                Text("Insertion directe sans presse-papiers sur Android 13+ (API 33), avec Gboard conservé. Cible modifiée, composition ou éditeur incompatible : texte conservé et copie manuelle. Copier remplace le clip précédent ; le marquage sensible masque l’aperçu, sans protéger l’accès.")
+                Text("Insertion directe sans presse-papiers sur Android 13+ (API 33), avec Gboard conservé. Insertion non confirmée (cible modifiée, composition, éditeur incompatible) : le texte est copié automatiquement dans le presse-papiers, ce qui remplace le clip précédent, et reste dans l’historique des 5 derniers textes. Le marquage sensible masque l’aperçu, sans protéger l’accès.")
             }
             if (state.transcript.isNotEmpty() || state.error != null) {
                 HorizontalDivider()
@@ -162,6 +164,15 @@ private fun HomeScreen(
                     OutlinedButton(onClick = clear, enabled = state.phase == Phase.OFF && !state.preparing && !state.recovering,
                         modifier = Modifier.testTag("clear")) { Text("Effacer") }
                 }
+            }
+            if (state.history.isNotEmpty() && !meeting) {
+                HorizontalDivider()
+                Text("Derniers textes dictés (${state.history.size}/5)", style = MaterialTheme.typography.titleMedium)
+                state.history.forEachIndexed { index, item ->
+                    SelectionContainer { Text(item, modifier = Modifier.testTag("history-$index")) }
+                    OutlinedButton(onClick = { copyText(item) }, modifier = Modifier.testTag("history-copy-$index")) { Text("Copier") }
+                }
+                TextButton(onClick = clearHistory, modifier = Modifier.testTag("history-clear")) { Text("Effacer l’historique") }
             }
             Text("Pas de cloud, pas d’analytics. Aucun enregistrement automatique. Le texte reconnu reste ici jusqu’à Effacer ; le son n’est pas sauvegardé.")
             TextButton(onClick = { licenses = true }, modifier = Modifier.testTag("licenses")) { Text("Modèles, licences et limites") }

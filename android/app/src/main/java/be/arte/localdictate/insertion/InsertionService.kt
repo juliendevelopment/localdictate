@@ -28,8 +28,10 @@ open class InsertionService : AccessibilityService() {
         if (event == null) return
         // Our own bubble/app and the keyboard window change while dictating; they are not the target.
         if (event.packageName?.toString() == packageName) return
+        // TYPE_WINDOWS_CHANGED fires for any window (keyboard, overlay) and is not evidence of a target change:
+        // the focused field, window, view id, text and selection are re-verified before and after the commit.
         when (event.eventType) {
-            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED, AccessibilityEvent.TYPE_WINDOWS_CHANGED,
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
             AccessibilityEvent.TYPE_VIEW_FOCUSED -> { captured.invalidated = true; captured.cause = "événement ${event.eventType} de ${event.packageName}" }
             AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED, AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED -> {
                 if (event.windowId == captured.state.windowId) {

@@ -33,11 +33,13 @@ data class DictationState(
     val message: String = "Aucune écoute automatique. Armez la bulle depuis cet écran, puis touchez-la dans le champ cible.",
     val durationMs: Long = 0,
     val error: String? = null,
+    val history: List<String> = emptyList(),
 )
 
 class DictationController(private val app: Application) {
     val models = ModelManager(app)
     val journal = TranscriptJournal(File(app.filesDir, "dictation/transcript.dat"))
+    val historyStore = DictationHistory(File(app.filesDir, "dictation/history.dat"))
     private val gate = UseGate()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var preparationJob: Job? = null
@@ -46,6 +48,7 @@ class DictationController(private val app: Application) {
     private val mutable = MutableStateFlow(DictationState(modelsReady = models.isReady()))
     val state = mutable.asStateFlow()
     init {
+        runCatching { historyStore.read() }.onSuccess { items -> update { it.copy(history = items) } }
         runCatching { journal.read() }.onSuccess { record ->
             update { it.copy(transcript = record.text, message = when {
                 record.interrupted -> "Dictée interrompue : texte reconnu récupéré. Le son en attente est perdu. Aucun collage automatique après reprise."
@@ -103,6 +106,18 @@ class DictationController(private val app: Application) {
                 update { it.copy(recovering = false) }
             }
         }
+    }
+    fun remember(text: String) {
+        runCatching { historyStore.add(text) }.onSuccess { items -> update { it.copy(history = items) } }
+    }
+    fun clearHistory() {
+        runCatching { historyStore.clear() }.onSuccess { update { it.copy(history = emptyList()) } }
+    }
+    fun copyText(text: String) {
+        if (text.isEmpty()) return
+        runCatching { PrivateClipboard(app).put(text) }.onSuccess {
+            update { it.copy(message = "Texte copié comme contenu sensible. Collez-le vous-même.") }
+        }.onFailure { update { state -> state.copy(error = "Copie refusée par Android.") } }
     }
     fun copy() {
         val text = state.value.transcript
