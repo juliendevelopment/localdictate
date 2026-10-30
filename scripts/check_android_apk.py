@@ -10,6 +10,9 @@ import tempfile
 import zipfile
 
 
+from android_release_version import parse_tag
+
+
 def parse_badging(text):
     lines = text.splitlines()
     package = next((line for line in lines if line.startswith("package:")), "")
@@ -52,7 +55,10 @@ def inspect(apk, sdk, expected_package, expected_version, expected_cert, scratch
     metadata = parse_badging(subprocess.check_output([str(tools / "aapt"), "dump", "badging", str(apk)], text=True))
     if metadata["package"] != expected_package or metadata["versionName"] != expected_version:
         raise ValueError("Wrong package or version")
-    if metadata["versionCode"] <= 0 or metadata["minSdk"] != 29 or metadata["targetSdk"] != 35 or metadata["debuggable"]:
+    expected_code = parse_tag("android-v" + expected_version).code
+    if metadata["versionCode"] != expected_code:
+        raise ValueError("APK versionCode does not match the exact release tag")
+    if metadata["minSdk"] != 29 or metadata["targetSdk"] != 35 or metadata["debuggable"]:
         raise ValueError("Unexpected SDK, versionCode or debug flag in release APK")
     subprocess.run([str(tools / "zipalign"), "-c", "-P", "16", "4", str(apk)], check=True, capture_output=True)
     native = []

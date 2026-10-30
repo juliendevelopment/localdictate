@@ -11,7 +11,10 @@
 
 ```sh
 cd android
-./gradlew --no-daemon --max-workers=2 --console=plain testDebugUnitTest lintDebug assembleDebug assembleRelease
+./gradlew --no-daemon --max-workers=1 --console=plain \
+  '-Dorg.gradle.jvmargs=-Xmx1024m -Dfile.encoding=UTF-8' \
+  -Pkotlin.compiler.execution.strategy=in-process \
+  testDebugUnitTest lintDebug assembleDebug assembleRelease
 ```
 
 Configurer `ANDROID_HOME` vers le SDK existant ou créer son propre `local.properties` ignoré par Git. Le pin Java asdf se trouve dans `android/.tool-versions`. Pas d’Android Studio ni d’émulateur requis pour ces vérifications.
@@ -30,3 +33,9 @@ Une clé de release dédiée a été créée hors checkout/vault (`<private key 
 ## Vérification des jalons
 
 Vérifier la CI pour le SHA exact, le dépôt privé et la branche distante `main`. Télécharger l’artefact réel et vérifier son checksum/manifest. Compter les tests depuis les XML JUnit, pas à partir d’une estimation du terminal. Les tests JVM/Compose ne valident pas le microphone, le JNI, l’insertion multi-app, le mode avion ou les durées réelles sur Pixel.
+
+## Exécution dans un HOME en lecture seule
+
+Le résolveur Maven de Robolectric essaie de créer `~/.robolectric-download-lock`. Un environnement restreint peut utiliser un SDK Robolectric déjà en cache, sans écrire dans HOME, en passant `-ProbolectricDependencyDir=/chemin/du/dossier/contenant/android-all-instrumented-15-robolectric-12650502-i7.jar`. Cette option configure uniquement le worker de test en mode offline. Elle ne désactive aucun test et n’installe/modifie aucune configuration globale.
+
+Le build résout l’AAR sherpa 2.0.1 via `fetchSherpa`/`builtBy` (SHA/taille épinglés). Aucun poids ASR/VAD n’est téléchargé par Gradle. Les APK ne contiennent que l’ABI arm64-v8a et les classes JNI sont conservées en release. Il n’y a pas de dépendance ONNX Runtime Java, de secret ou de configuration de signature dans cette lane. Les déclencheurs/permissions des workflows ne sont pas modifiés.

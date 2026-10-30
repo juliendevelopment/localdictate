@@ -1,30 +1,31 @@
 # LocalDictate
 
-Application Android personnelle de reconnaissance vocale **locale**, en français et en anglais, sans abonnement, API payante, analytics ni copie de la marque/interface de Wispr Flow.
+Dictée Android personnelle **locale**, français/anglais, sans abonnement, API payante, analytics ni enregistrement automatique.
 
-## Deux modes
+La dictée est raccordée à un vrai moteur Parakeet TDT 0.6B v3 via sherpa-onnx, avec préparation explicite vérifiée, bulle déplaçable, capture foreground, segmentation Silero, limite 15 min et récupération locale du texte. **Aucun essai sur téléphone n’est encore déclaré réussi.** Le mode réunion (2 h, transcription et résumé écrit locaux) est distinct et clairement indisponible.
 
-- **Dictée** : bulle flottante, démarrage/arrêt explicites, jusqu’à **15 minutes**, puis insertion au curseur dans l’application cible, en conservant Gboard. Repli par copie explicite si le champ n’est pas compatible.
-- **Réunion** : enregistrement explicite jusqu’à **2 heures**, transcription sauvegardée progressivement puis **résumé local**. Ce mode n’insère rien dans une autre application.
+## Utilisation
 
-## État réel
+1. Préparer les modèles volontairement (environ 488 Mo de réseau ; 1,5 Go libres), puis autoriser microphone, notifications, bulle et accessibilité depuis l’écran de configuration.
+2. Armer la bulle depuis cet écran visible : le service charge les modèles, le micro reste fermé.
+3. Placer le curseur dans un champ d’une autre app, toucher **Dicter**, parler avec les pauses voulues, puis **Arrêter**. Le micro est libéré avant le traitement des derniers segments. Croix/notification : arrêter et désarmer.
+4. L’insertion exige que la cible et sa sélection soient intactes et que la propriété du presse-papiers soit vérifiable. **Android peut refuser cette vérification en arrière-plan** : dans ce cas, aucun collage automatique ; ouvrir LocalDictate, **Copier**, puis coller soi-même. Le clip sensible remplace le contenu précédent du presse-papiers. Toujours vérifier le champ avant de recopier après une insertion non confirmée.
+5. Le texte reconnu reste dans le stockage privé jusqu’à **Effacer**. Après un arrêt brutal, le texte synchronisé est récupéré, mais le son encore en attente est perdu. Aucun collage ni réarmement automatique après reprise.
 
-Ce premier jalon est le **socle du projet**, pas une app de dictée terminée : écran Android présentant les deux modes, règles de durée testées, build reproductible et CI. Aucun microphone, modèle, service d’accessibilité ou résumé n’est simulé. La reconnaissance, la bulle, l’insertion et le traitement des réunions restent à implémenter.
+Aucun poids modèle dans le dépôt ou l’APK. Internet sert seulement à la préparation ; elle est bloquée tant que le service est armé ou termine son travail. L’accessibilité consulte uniquement la cible demandée et la revalide, sans historique d’écran ni lecture permanente. Pas de champ password, pas de remplacement complet du texte d’un champ.
 
-Le socle ne demande aucune permission sensible et ne possède pas la permission Internet. Un téléchargement de modèles ne pourra être ajouté qu’en préparation explicite, pas pendant l’écoute.
+## Développement et preuves
 
-## Développement
-
-- Checkout VPS : `~/dev/sources/localdictate`
-- Code Android : [`android/`](android/), Kotlin + Compose, JDK 17, SDK 35, minimum Android 10.
-- Application : `be.arte.localdictate` (`.debug` pour les builds debug).
-- [Périmètre et critères](docs/mvp.md) · [Architecture](docs/architecture.md) · [Build et CI](docs/ci.md) · [Références](docs/references.md) · [État et prochaine étape](docs/status.md).
+Kotlin/Compose dans `android/`, JDK 17, SDK 35, min 29, ABI arm64-v8a. Wrapper et dépendances épinglés ; le build peut télécharger seulement l’AAR natif épinglé, jamais les poids. Aucune licence ajoutée au code propre du projet.
 
 ```sh
 cd android
-./gradlew --no-daemon --max-workers=2 testDebugUnitTest lintDebug assembleDebug assembleRelease
+ANDROID_HOME=/chemin/du/sdk ./gradlew --no-daemon --max-workers=1 --console=plain \
+  '-Dorg.gradle.jvmargs=-Xmx1024m -Dfile.encoding=UTF-8' \
+  -Pkotlin.compiler.execution.strategy=in-process \
+  testDebugUnitTest lintDebug assembleDebug assembleRelease
 ```
 
-[GitHub Actions](https://github.com/juliendevelopment/localdictate/actions/workflows/android-build.yml) construit à chaque push sur `main`, sur les pull requests et à la demande. Le debug APK est un artefact de développement ; aucune release utilisateur ni signature stable n’est encore publiée.
+[État exact et résultats](docs/status.md) · [Architecture et limites d’insertion](docs/architecture.md) · [Recette Pixel](docs/acceptation-pixel.md) · [Périmètre](docs/mvp.md) · [Licences et attribution NVIDIA](docs/licences.md) · [Build/CI](docs/ci.md).
 
-Aucune licence de redistribution n’est choisie pour le code du projet à ce stade. Les dépendances conservent leurs propres licences.
+[GitHub Actions](https://github.com/juliendevelopment/localdictate/actions/workflows/android-build.yml) conserve ses déclencheurs et permissions. Le debug est un artefact de développement ; release locale minifiée non signée. l’agent possède revue, Git, signature et livraison ; aucun commit/publication dans ce lot.

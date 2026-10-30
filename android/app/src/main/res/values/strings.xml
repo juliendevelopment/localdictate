@@ -1,13 +1,4 @@
 <resources>
     <string name="app_name">LocalDictate</string>
-    <string name="foundation_notice">Socle de développement : enregistrement et modèles non intégrés.</string>
-    <string name="privacy_notice">Pas de cloud, pas d’analytics. Aucun enregistrement automatique.</string>
-    <string name="languages">Langues prévues : français et anglais</string>
-    <string name="dictation">Dictée</string>
-    <string name="meeting">Réunion</string>
-    <string name="dictation_duration">Jusqu’à 15 minutes</string>
-    <string name="meeting_duration">Jusqu’à 2 heures</string>
-    <string name="dictation_description">Parlez, arrêtez la dictée, puis insérez le texte au curseur. La bulle et l’accessibilité seront utilisées uniquement sur votre demande.</string>
-    <string name="meeting_description">Enregistrez une réunion, conservez sa transcription puis produisez un résumé local. Aucun collage automatique dans une autre application.</string>
-    <string name="development_status">Fonctions vocales à venir</string>
+    <string name="accessibility_description">Android donne un accès large au contenu des fenêtres. LocalDictate consulte uniquement le champ ciblé quand vous lancez une dictée, puis le revalide pour coller au curseur après arrêt. Aucun historique d’écran, aucune surveillance permanente, aucun champ de mot de passe. Le texte reste sur le téléphone. Vous pouvez désactiver ce service à tout moment.</string>
 </resources>
