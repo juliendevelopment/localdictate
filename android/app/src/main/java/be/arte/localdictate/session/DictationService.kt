@@ -150,7 +150,11 @@ class DictationService : Service() {
                         if (claimed) targetService!!.insert(record.text) else "Insertion déjà tentée ou interrompue : vérifiez le champ."
                     }
                 }
-                controller.update { it.copy(message = message) }
+                if (message == InsertionService.OBSERVED) {
+                    // Inserted and observed: nothing left to recover, so the next dictation can start.
+                    withContext(NonCancellable + Dispatchers.IO) { controller.journal.clear() }
+                    controller.update { it.copy(transcript = "", message = "Texte inséré dans le champ.") }
+                } else controller.update { it.copy(message = message) }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: OutOfMemoryError) { controller.update { it.copy(error = "Mémoire insuffisante, texte reconnu conservé.") } }
             catch (_: Throwable) { controller.update { it.copy(error = "Dictée interrompue : texte reconnu conservé, copie manuelle disponible.") } }

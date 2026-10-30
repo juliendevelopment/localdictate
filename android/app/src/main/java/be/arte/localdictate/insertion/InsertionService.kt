@@ -32,8 +32,8 @@ open class InsertionService : AccessibilityService() {
                 if (event.windowId == captured.state.windowId) {
                     // Only callbacks from our target may be ignored after our single commit.
                     // Window/focus/editor changes still invalidate while waiting for observation.
-                    val ownCallback = captured.dispatching && event.packageName?.toString() == captured.state.packageName &&
-                        event.source == captured.node
+                    // Node equality is not guaranteed across IPC, so same window and package while dispatching.
+                    val ownCallback = captured.dispatching && event.packageName?.toString() == captured.state.packageName
                     if (!ownCallback) captured.invalidated = true
                 }
             }
@@ -123,12 +123,23 @@ open class InsertionService : AccessibilityService() {
             captured.dispatching = true
             requested = true // commitText is void; an exception is also uncertain, never retried.
             captured.editor.commit(text)
-            // One fresh observation, not a main-thread IPC polling loop. Never resend if delayed.
-            delay(350)
-            val observed = focused(captured) ?: return@withContext UNCERTAIN
-            if (observed.text?.toString() == expected && observed.textSelectionStart == cursor &&
-                observed.textSelectionEnd == cursor) "Insertion observée dans le champ. Transcription conservée."
-            else UNCERTAIN
+            // Read-only confirmation: never resend. Events from the target's own callbacks may have
+            // flagged the capture as invalidated, so observe the focused field directly.
+            var seen = "aucun champ observé"
+            repeat(6) {
+                delay(250)
+                if (captured.invalidated) return@withContext "$UNCERTAIN (fenêtre ou focus modifié)"
+                val node = findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+                if (node != null && node.refresh() && node.packageName?.toString() == captured.state.packageName &&
+                    node.viewIdResourceName == captured.state.viewId) {
+                    val text = node.text?.toString().orEmpty()
+                    if (text == expected && (node.textSelectionStart == cursor && node.textSelectionEnd == cursor ||
+                            node.textSelectionStart < 0)) return@withContext OBSERVED
+                    seen = "texte ${text.length}/${expected.length} car., curseur ${node.textSelectionStart}-" +
+                        "${node.textSelectionEnd} attendu $cursor"
+                }
+            }
+            "$UNCERTAIN ($seen)"
         } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
         catch (_: Exception) { if (requested) UNCERTAIN else FALLBACK }
         finally {
@@ -137,6 +148,7 @@ open class InsertionService : AccessibilityService() {
         }
     }
     companion object {
+        const val OBSERVED = "Insertion observée dans le champ."
         private const val FALLBACK = "Cible ou éditeur absent, modifié ou incompatible : texte conservé. Utilisez Copier puis collez vous-même."
         private const val UNCERTAIN = "Insertion demandée mais non confirmée. Vérifiez le champ avant toute copie pour éviter un doublon."
         var connected: InsertionService? = null
