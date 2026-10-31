@@ -64,7 +64,8 @@ class MainActivity : ComponentActivity() {
                     accessibility = { openSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS) },
                     arm = ::arm, stop = { controller.service?.stopCapture() },
                     disarm = { controller.service?.disarm() }, copy = model.controller::copy, clear = model.controller::clear,
-                    copyText = model.controller::copyText, clearHistory = model.controller::clearHistory)
+                    copyText = model.controller::copyText, clearHistory = model.controller::clearHistory,
+                    showBubble = { controller.service?.showBubble() })
             }
         }
     }
@@ -100,7 +101,7 @@ private fun HomeScreen(
     state: DictationState, ready: Readiness, prepare: () -> Unit, cancel: () -> Unit,
     microphone: () -> Unit, notifications: () -> Unit, overlay: () -> Unit, accessibility: () -> Unit,
     arm: () -> Unit, stop: () -> Unit, disarm: () -> Unit, copy: () -> Unit, clear: () -> Unit,
-    copyText: (String) -> Unit, clearHistory: () -> Unit,
+    copyText: (String) -> Unit, clearHistory: () -> Unit, showBubble: () -> Unit = {},
 ) {
     var meeting by rememberSaveable { mutableStateOf(false) }
     var disclosure by rememberSaveable { mutableStateOf(false) }
@@ -121,7 +122,7 @@ private fun HomeScreen(
                 Text("Aucun enregistrement ni résumé de réunion n’est implémenté.", modifier = Modifier.testTag("meeting-unavailable"))
             } else {
                 Text("Jusqu’à 15 minutes", style = MaterialTheme.typography.titleLarge)
-                Text("Les pauses ne terminent pas la dictée. Armez ici, placez le curseur dans une autre app, puis touchez ● Dicter. Touchez ■ Arrêter pour traiter et insérer au curseur.")
+                Text("Les pauses ne terminent pas la dictée. Armez ici, placez le curseur dans une autre app, touchez la bulle puis parlez. ✓ insère au curseur, ✕ annule (le texte reste dans les derniers textes). Glissez la bulle sur le ✕ en bas pour la masquer : elle revient au réveil du téléphone.")
                 Text("État : " + when (state.phase) {
                     Phase.OFF -> "désarmé"
                     Phase.LOADING -> "chargement local, micro fermé"
@@ -139,6 +140,7 @@ private fun HomeScreen(
                 } else {
                     if (state.phase == Phase.RECORDING) Button(onClick = stop, modifier = Modifier.testTag("stop")) { Text("Arrêter et traiter") }
                     OutlinedButton(onClick = disarm, modifier = Modifier.testTag("disarm")) { Text("Arrêter et désarmer") }
+                    if (state.phase == Phase.ARMED) OutlinedButton(onClick = showBubble, modifier = Modifier.testTag("show-bubble")) { Text("Afficher la bulle") }
                 }
                 HorizontalDivider()
                 Text("Préparation", style = MaterialTheme.typography.titleMedium)

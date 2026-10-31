@@ -2,7 +2,10 @@ package be.arte.localdictate.session
 
 import android.Manifest
 import android.app.*
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.IBinder
@@ -14,6 +17,7 @@ import be.arte.localdictate.MainActivity
 import be.arte.localdictate.R
 import be.arte.localdictate.asr.*
 import be.arte.localdictate.audio.MicrophoneCapture
+import be.arte.localdictate.audio.Pcm16
 import be.arte.localdictate.insertion.InsertionService
 import be.arte.localdictate.insertion.PrivateClipboard
 import kotlinx.coroutines.*
@@ -27,13 +31,20 @@ class DictationService : Service() {
     private var engine: LocalRecognizer? = null
     private var microphone: MicrophoneCapture? = null
     private var wakeLock: PowerManager.WakeLock? = null
-    private var bubble: FloatingControl? = null
+    @Volatile private var bubble: FloatingControl? = null
+    private var cancelRequested = false
+    /** A bubble hidden by dragging it onto ✕ comes back when the phone is woken or unlocked. */
+    private val wake = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) { bubble?.show() }
+    }
+    private var wakeRegistered = false
     private var attached = false
     private var disarming = false
     private var graceful = false
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == DISARM) { disarm(); return START_NOT_STICKY }
+        if (intent?.action == SHOW) { if (attached) bubble?.show() else stopSelf(); return START_NOT_STICKY }
         if (intent?.action != ARM || attached || controller.state.value.phase != Phase.LOADING) {
             if (!attached) stopSelf()
             return START_NOT_STICKY
@@ -50,14 +61,21 @@ class DictationService : Service() {
             if (Build.VERSION.SDK_INT >= 30) {
                 startForeground(1, notification("Bulle armée, microphone fermé"), ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
             } else startForeground(1, notification("Bulle armée, microphone fermé"))
-            bubble = FloatingControl(this, ::toggleCapture, ::disarm)
+            bubble = FloatingControl(this, onStart = ::toggleCapture, onConfirm = ::stopCapture,
+                onCancel = ::cancelCapture, onOpen = ::toggleCapture)
+            val filter = IntentFilter().apply { addAction(Intent.ACTION_USER_PRESENT); addAction(Intent.ACTION_SCREEN_ON) }
+            if (Build.VERSION.SDK_INT >= 33) registerReceiver(wake, filter, RECEIVER_NOT_EXPORTED) else registerReceiver(wake, filter)
+            wakeRegistered = true
+            var shownText: String? = null
             scope.launch { controller.state.collect { state ->
                 bubble?.render(state)
-                manager.notify(1, notification(state.error ?: when (state.phase) {
-                    Phase.RECORDING -> "Enregistrement local — touchez Arrêter et désarmer"
+                val text = state.error ?: when (state.phase) {
+                    Phase.RECORDING -> "Enregistrement local — touchez ✓ pour insérer"
                     Phase.PROCESSING -> "Traitement local, microphone fermé"
                     else -> "Bulle armée, microphone fermé"
-                }))
+                }
+                // Only when the text changes: the duration ticks many times per second while dictating.
+                if (text != shownText) { shownText = text; manager.notify(1, notification(text)) }
             } }
             loadJob = scope.launch {
                 try {
@@ -99,6 +117,7 @@ class DictationService : Service() {
             controller.update { it.copy(message = "Copiez puis désarmez et effacez le texte précédent avant une nouvelle dictée.") }
             return
         }
+        cancelRequested = false
         val targetService = InsertionService.connected
         val hasTarget = runCatching { targetService?.snapshot() == true }.getOrDefault(false)
         val startRefusal = if (hasTarget) "" else targetService?.lastRefusal.orEmpty()
@@ -137,6 +156,7 @@ class DictationService : Service() {
                         }
                     }, emit = {
                         if (!live) { live = true; controller.update { state -> state.copy(micLive = true) } }
+                        bubble?.level(Pcm16.level(it.samples))
                         emit(it.samples)
                     }) },
                     stopCapture = recorder::stop,
@@ -150,6 +170,7 @@ class DictationService : Service() {
                     onDuration = { duration -> controller.update { it.copy(durationMs = duration) } },
                 ).run()
                 val interrupted = failure != null || controller.state.value.error != null
+                val cancelled = cancelRequested
                 val record = withContext(Dispatchers.IO) { controller.journal.finish(sessionId, interrupted) }
                 completed = true
                 // Saved before any insertion attempt: a dictated text is never only in the target field.
@@ -157,6 +178,7 @@ class DictationService : Service() {
                 val message = when {
                     interrupted -> "Dictée interrompue ou surchargée : vérifiez le texte récupéré, aucun collage automatique."
                     record.text.isBlank() -> "Aucune parole reconnue. Vous pouvez réessayer."
+                    cancelled -> "Dictée annulée : rien n’est inséré ni copié."
                     !hasTarget || targetService !== InsertionService.connected ->
                         "Pas de champ compatible au démarrage (${startRefusal.ifBlank { "service d’accessibilité non connecté" }})."
                     else -> {
@@ -170,13 +192,17 @@ class DictationService : Service() {
                     controller.update { it.copy(transcript = "", notice = null, message = "Texte inséré dans le champ.") }
                 } else if (record.text.isNotBlank()) {
                     // Not confirmed: copy automatically so the text can be pasted by hand.
-                    val copied = runCatching { PrivateClipboard(applicationContext).put(record.text) }.isSuccess
+                    val copied = !cancelled && runCatching { PrivateClipboard(applicationContext).put(record.text) }.isSuccess
                     // The text is in the history (and the clipboard): free the bubble for the next dictation.
                     val released = remembered && !interrupted &&
                         runCatching { withContext(NonCancellable + Dispatchers.IO) { controller.journal.clear() } }.isSuccess
                     controller.update { it.copy(
                         transcript = if (released) "" else it.transcript,
-                        notice = if (copied) "Non inséré • texte copié, collez-le" else "Non inséré • texte dans l’app",
+                        notice = when {
+                            cancelled -> "Annulée • texte gardé dans l’app"
+                            copied -> "Non inséré • texte copié, collez-le"
+                            else -> "Non inséré • texte dans l’app"
+                        },
                         message = message + (if (copied) " Texte copié dans le presse-papiers : collez-le (appui long)." else "") +
                             (if (remembered) " Il reste dans les derniers textes dictés." else "")) }
                 } else controller.update { it.copy(message = message) }
@@ -197,6 +223,13 @@ class DictationService : Service() {
             }
         }
     }
+    fun showBubble() { bubble?.show() }
+    /** ✕ on the bubble: stop listening and insert nothing; the text is still kept in the history. */
+    fun cancelCapture() {
+        if (controller.state.value.phase != Phase.RECORDING) return
+        cancelRequested = true
+        stopCapture()
+    }
     fun stopCapture() {
         if (controller.state.value.phase == Phase.RECORDING) {
             microphone?.stop()
@@ -214,6 +247,7 @@ class DictationService : Service() {
         microphone?.stop()
         wakeLock?.let { if (it.isHeld) it.release() }; wakeLock = null
         bubble?.close()
+        if (wakeRegistered) { runCatching { unregisterReceiver(wake) }; wakeRegistered = false }
         val loading = loadJob
         val session = sessionJob
         scope.cancel()
@@ -237,11 +271,15 @@ class DictationService : Service() {
         val stop = PendingIntent.getService(this, 1, Intent(this, DictationService::class.java).setAction(DISARM), PendingIntent.FLAG_IMMUTABLE)
         return Notification.Builder(this, CHANNEL).setSmallIcon(R.drawable.ic_launcher)
             .setContentTitle("LocalDictate").setContentText(message).setOngoing(true).setOnlyAlertOnce(true)
-            .setContentIntent(open).addAction(Notification.Action.Builder(null, "Arrêter et désarmer", stop).build()).build()
+            .setContentIntent(open)
+            .addAction(Notification.Action.Builder(null, "Afficher la bulle", PendingIntent.getService(this, 2,
+                Intent(this, DictationService::class.java).setAction(SHOW), PendingIntent.FLAG_IMMUTABLE)).build())
+            .addAction(Notification.Action.Builder(null, "Arrêter et désarmer", stop).build()).build()
     }
     companion object {
         const val ARM = "be.arte.localdictate.ARM"
         const val DISARM = "be.arte.localdictate.DISARM"
+        const val SHOW = "be.arte.localdictate.SHOW"
         internal const val CHANNEL = "dictation"
     }
 }
