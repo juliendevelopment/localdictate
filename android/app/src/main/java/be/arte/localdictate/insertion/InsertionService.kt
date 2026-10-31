@@ -26,8 +26,10 @@ open class InsertionService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val captured = target ?: return
         if (event == null) return
-        // Our own bubble/app and the keyboard window change while dictating; they are not the target.
-        if (event.packageName?.toString() == packageName) return
+        // System UI, the keyboard and our own bubble emit window events while dictating; they are not the target.
+        // Switching to another app is still refused: the focused field, package and window are re-verified.
+        val source = event.packageName?.toString()
+        if (source != null && source != captured.state.packageName) return
         // TYPE_WINDOWS_CHANGED fires for any window (keyboard, overlay) and is not evidence of a target change:
         // the focused field, window, view id, text and selection are re-verified before and after the commit.
         when (event.eventType) {

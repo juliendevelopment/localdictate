@@ -265,6 +265,18 @@ class InsertionServiceTest {
         service.onAccessibilityEvent(AccessibilityEvent.obtain(AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED))
         service.insert("Bonjour"); assertEquals(0, editor.commits)
     }
+    @Test fun systemUiWindowEventsDoNotCancelAnUnchangedTarget() = runTest(dispatcher) {
+        assertTrue(service.snapshot())
+        service.onAccessibilityEvent(AccessibilityEvent.obtain(AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED)
+            .apply { packageName = "com.android.systemui" })
+        assertTrue(service.insert("Bonjour").contains("Insertion observée"))
+    }
+    @Test fun targetAppWindowEventStillCancelsTheTarget() = runTest(dispatcher) {
+        assertTrue(service.snapshot())
+        service.onAccessibilityEvent(AccessibilityEvent.obtain(AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED)
+            .apply { packageName = "fixture.notes" })
+        service.insert("Bonjour"); assertEquals(0, editor.commits)
+    }
     @Test fun genericWindowsChangedEventsAloneDoNotCancelAnUnchangedTarget() = runTest(dispatcher) {
         // Keyboard and overlay windows change during a long dictation; the field itself is re-verified.
         assertTrue(service.snapshot())
