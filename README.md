@@ -38,3 +38,7 @@ ANDROID_HOME=/path/to/sdk ./gradlew --no-daemon --max-workers=1 --console=plain 
 [Status and releases](docs/status.md) · [Architecture](docs/architecture.md) · [Text insertion: design and field tests](docs/insertion.md) · [Scope](docs/mvp.md) · [Manual phone test plan](docs/acceptation-pixel.md) · [Models and licenses](docs/licences.md) · [Build and CI](docs/ci.md) · [References](docs/references.md)
 
 The app's interface is in French.
+
+## License
+
+LocalDictate's own code is licensed under the [Apache License 2.0](LICENSE). Third-party components and the downloaded models keep their own licenses (Parakeet TDT 0.6B v3: CC BY 4.0 by NVIDIA; sherpa-onnx: Apache 2.0; Silero VAD: MIT); see [models and licenses](docs/licences.md).

@@ -1,6 +1,6 @@
 # Models, runtime and licenses
 
-Third-party components keep their own licenses. Their notices are bundled in `assets/THIRD_PARTY_NOTICES.txt` and readable offline in the app under « Modèles, licences et limites » → « Lire les notices complètes ».
+LocalDictate's own code is licensed under the Apache License 2.0 (see `LICENSE`). Third-party components keep their own licenses. Their notices are bundled in `assets/THIRD_PARTY_NOTICES.txt` and readable offline in the app under « Modèles, licences et limites » → « Lire les notices complètes ».
 
 | Component | Attribution / license | Primary source |
 | --- | --- | --- |
