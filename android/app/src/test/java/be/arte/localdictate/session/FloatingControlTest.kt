@@ -8,6 +8,7 @@ import android.view.View
 import android.view.WindowManager
 import org.robolectric.RuntimeEnvironment
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -59,6 +60,16 @@ class FloatingControlTest {
             ShadowLooper.idleMainLooper()
             snapshot(root, name)
         }
+        fun screenKept() = (root.layoutParams as WindowManager.LayoutParams).flags and
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON != 0
+        bubble.render(DictationState(phase = Phase.ARMED))
+        assertFalse(screenKept())
+        bubble.render(DictationState(phase = Phase.RECORDING, micLive = true))
+        assertTrue(screenKept()) // A long dictation is not cut by the screen timeout.
+        bubble.render(DictationState(phase = Phase.PROCESSING))
+        assertTrue(screenKept())
+        bubble.render(DictationState(phase = Phase.ARMED))
+        assertFalse(screenKept())
         bubble.render(DictationState(phase = Phase.RECORDING, micLive = true))
         val buttons = mutableListOf<View>()
         fun collect(view: View) {

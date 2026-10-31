@@ -40,6 +40,7 @@ Procedure: [ci.md](ci.md#releases). Never move a tag whose release exists. Versi
 | 0.1.9 | Microphone opened on tap (Silero loaded in parallel), segments widened by 0.3 s, forced cut at 20 s instead of 8 s |
 | 0.2.0 | New bubble (square at rest, ✕/level/✓ pill, drag onto ✕ to hide, comes back on wake); ✕ cancels without inserting but keeps the text |
 | 0.2.1 | First public release: Apache 2.0 license, English documentation |
+| 0.2.2 | Screen kept on while dictating and processing (bubble window flag) |
 
 ## Agreed scope
 

@@ -91,6 +91,7 @@ class FloatingControl(
     private var dockRight = true
     private var shown = false
     private var targetShown = false
+    private var screenKept = false
     private var shownStatus = ""
     private val hideStatus = Runnable { status.visibility = View.GONE }
     private val pendingLevel = AtomicBoolean(false)
@@ -160,6 +161,7 @@ class FloatingControl(
             }
             root.post { dock() }
         }
+        keepScreenOn(mode == Mode.RECORDING || mode == Mode.PROCESSING)
         if (mode == Mode.RECORDING && !state.micLive) wave.style = WaveView.Style.DOTS
         else if (mode == Mode.RECORDING) wave.style = WaveView.Style.LIVE
         val message = state.error ?: state.notice
@@ -238,6 +240,15 @@ class FloatingControl(
         target.scaleX = 1f; target.scaleY = 1f
         if (visible) runCatching { manager.addView(target, targetParams) }.onFailure { targetShown = false }
         else runCatching { manager.removeView(target) }
+    }
+
+    /** A long dictation must not be cut by the screen timeout; only while dictating or processing. */
+    private fun keepScreenOn(on: Boolean) {
+        if (on == screenKept) return
+        screenKept = on
+        params.flags = if (on) params.flags or WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+            else params.flags and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON.inv()
+        if (shown) runCatching { manager.updateViewLayout(root, params) }
     }
 
     private fun dock() {

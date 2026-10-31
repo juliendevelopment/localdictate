@@ -12,7 +12,7 @@ Foreground-service start restrictions and "while-in-use" microphone access are d
 
 `FloatingControl` is a `TYPE_APPLICATION_OVERLAY` window with `FLAG_NOT_FOCUSABLE`, so the target field keeps the cursor. At rest it is a small rounded square with a waveform icon, docked to the nearest screen edge. While dictating it becomes a pill **✕ | live level | ✓**: dots until the microphone delivers its first audio, then bars following the real input level (posted at most once per frame from the capture thread). ✓ (or tapping the level) stops and inserts; ✕ stops and inserts nothing, but the text is still recognized and kept in the history. After a dictation that was not inserted, a short notice is shown for 5 s; an amber « ! » square means a text is waiting in the app.
 
-Dragging the bubble (outside a dictation) shows a ✕ target at the bottom of the screen; dropping it there removes the overlay window while the service stays armed with the microphone closed. A receiver for `ACTION_USER_PRESENT`/`ACTION_SCREEN_ON`, the notification action and a button in the app add it back. A drag never starts a capture.
+Dragging the bubble (outside a dictation) shows a ✕ target at the bottom of the screen; dropping it there removes the overlay window while the service stays armed with the microphone closed. A receiver for `ACTION_USER_PRESENT`/`ACTION_SCREEN_ON`, the notification action and a button in the app add it back. A drag never starts a capture. While dictating and processing, the bubble window sets `FLAG_KEEP_SCREEN_ON` so a long dictation is not cut by the screen timeout; the flag is cleared at rest.
 
 ## Audio and compute
 
