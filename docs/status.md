@@ -4,7 +4,7 @@
 
 Dépôt privé : https://github.com/juliendevelopment/localdictate . Checkout canonique : `~/dev/sources/localdictate`. Les agents Codex de la phase précédente restent arrêtés ; ne pas les relancer.
 
-La **dictée** est livrée en APK signés (releases GitHub `android-v0.1.0` à `android-v0.1.7`, v0.1.8 en cours de publication), installés et essayés par le mainteneur sur son Pixel avec Google Keep et Gboard. Le mode **réunion** n’est pas dans ces APK (`work/meeting-core` non fusionnée).
+La **dictée** est livrée en APK signés (releases GitHub `android-v0.1.0` à `android-v0.1.8` ; v0.1.8 publiée au SHA `0c7cae2`, APK téléchargé et vérifié : checksum, certificat `07780567…efe36`, code de version 108), installés et essayés par le mainteneur sur son Pixel avec Google Keep et Gboard. Le mode **réunion** n’est pas dans ces APK (`work/meeting-core` non fusionnée).
 
 Vérifié sur le téléphone par le mainteneur :
 
@@ -19,7 +19,7 @@ Vérifié sur le téléphone par le mainteneur :
 
 ## Prochaine action
 
-1. Publier v0.1.8 (CI verte au SHA exact puis tag), puis faire refaire à le mainteneur : plusieurs dictées de suite dans Keep sans toucher l’écran entre deux (note vide puis remplie), une dictée de 5 min, puis Messages et un champ web.
+1. Faire refaire à le mainteneur avec v0.1.8 : plusieurs dictées de suite dans Keep sans toucher l’écran entre deux (note vide puis remplie), une dictée de 5 min, puis Messages et un champ web.
 2. Si un refus subsiste, lire la raison affichée (tableau dans `insertion.md`) et corriger **la règle concernée** ; ne pas réintroduire d’invalidation par événements ni d’exigence de session figée.
 3. Ensuite seulement : endurance 10–15 min (mémoire, chauffe), puis réconciliation de `work/meeting-core`.
 
