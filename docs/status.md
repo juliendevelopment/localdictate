@@ -1,55 +1,69 @@
-# Reprise LocalDictate — pause pour préserver les quotas
+# État LocalDictate
 
-## Situation actuelle
+## Situation au 31 octobre 2026
 
-le mainteneur demande de sauvegarder en commits pour confier la suite à un autre agent. **Les deux agents Codex ont été arrêtés volontairement. Ne pas les relancer automatiquement ni reprendre la publication sur leurs notifications de fin.** Le travail est conservé ; une reprise doit venir de l’agent choisi par le mainteneur.
+Dépôt privé : https://github.com/juliendevelopment/localdictate . Checkout canonique : `~/dev/sources/localdictate`. Les agents Codex de la phase précédente restent arrêtés ; ne pas les relancer.
 
-**Aucun APK de dictée signé et prêt à tester n’a encore été publié.** Les APK de développement précédents ne constituent pas la livraison demandée. Les corrections/API33 et l’intégration Android réunion sont des **WIP**, pas des fonctionnalités validées en totalité.
+La **dictée** est livrée en APK signés (releases GitHub `android-v0.1.0` à `android-v0.1.7`, v0.1.8 en cours de publication), installés et essayés par le mainteneur sur son Pixel avec Google Keep et Gboard. Le mode **réunion** n’est pas dans ces APK (`work/meeting-core` non fusionnée).
 
-Dépôt privé : https://github.com/juliendevelopment/localdictate . Checkout canonique : `~/dev/sources/localdictate`.
+Vérifié sur le téléphone par le mainteneur :
 
-## Mise à jour — fusion de `work/dictation` (2026-10-30)
+- installation (après désactivation temporaire de Play Protect) et mises à jour par-dessus avec la même clé ;
+- permissions, y compris « Autoriser les paramètres restreints » pour l’accessibilité ;
+- préparation des modèles Parakeet + Silero, chargement JNI, reconnaissance française correcte ;
+- bulle armée, déplaçable, ● Dicter / ■ Arrêter ;
+- insertion réelle au curseur dans Keep, mais **pas de façon fiable** jusqu’à v0.1.7 ;
+- copie automatique de secours et historique des 5 derniers textes (v0.1.6, v0.1.7).
 
-`work/dictation` (insertion directe API33) est fusionnée dans `main` localement, sans conflit. Sur ce code réconcilié : **98 tests JVM/activité sans échec/erreur/ignoré**, `lintDebug`, `assembleDebug`, `assembleRelease` et 8 tests Python réussis. Non poussé, CI distante non vérifiée pour ce SHA, aucun APK signé publié. Revue de sécurité des points 1-4 ci-dessous toujours à faire (composition Gboard, vérification fraîche après vidage ASR). `work/meeting-core` reste à réconcilier.
+**L’insertion échouait par une erreur de conception** (exiger un « monde figé » pendant la dictée), corrigée par la refonte v0.1.8. Analyse complète, journal des essais version par version, règles actuelles et lecture des messages : **[insertion.md](insertion.md)**.
 
-## Branches à récupérer
+## Prochaine action
 
-- **`main`** : socle Android/CI, première implémentation de dictée intégrée, signature Gradle optionnelle dédiée, version source `0.1.0` / code `100`, outillage de release et contrôle d’APK. La logique d’insertion de cette base utilise encore le presse-papiers : ne pas la publier comme solution finale.
-- **`work/dictation`** — point de code WIP `714696d3e1c2b8bdcbd461ae50ac306351615400` : correction d’insertion directe via l’API d’édition d’accessibilité Android 13+, ressources/service spécifiques API33, isolation des anciens Android, microphone sensible et tests supplémentaires. **À revoir et valider avant fusion/release.** Worktree VPS : `<private folder>`.
-- **`work/meeting-core`** — noyau validé `fd84d93`, puis point d’intégration WIP `d4083376741af126f3492eebaf314addc027b10b` : stockage audio/journal/résumé extractif plus contrôleur, pipeline, dépôt, service et export commencés. Le branchement UI/manifest/tests et les transitions doivent être terminés/revus ; ne pas supposer cette branche compilable ou complète. Worktree VPS : `<private folder>`.
+1. Publier v0.1.8 (CI verte au SHA exact puis tag), puis faire refaire à le mainteneur : plusieurs dictées de suite dans Keep sans toucher l’écran entre deux (note vide puis remplie), une dictée de 5 min, puis Messages et un champ web.
+2. Si un refus subsiste, lire la raison affichée (tableau dans `insertion.md`) et corriger **la règle concernée** ; ne pas réintroduire d’invalidation par événements ni d’exigence de session figée.
+3. Ensuite seulement : endurance 10–15 min (mémoire, chauffe), puis réconciliation de `work/meeting-core`.
 
-Une entrée documentaire de reprise peut être au-dessus de ces points WIP. Les branches ne sont pas à jeter ou recréer : elles contiennent le travail à poursuivre. Les modifications de `MicrophoneCapture`, des contrôleurs et de l’UI doivent être réconciliées, pas résolues aveuglément par « ours/theirs ».
+## Releases et procédure
+
+Chaque correctif publié : notes `docs/releases/vX.Y.Z.md` (obligatoires pour le workflow), commit sur `main`, push, attendre **Android Build** vert au SHA exact, puis tag annoté `android-vX.Y.Z` sur ce SHA et push du tag. **Android Release** construit, signe, vérifie (`apksigner`, paquet, version, ABI) et publie `LocalDictate-vX.Y.Z.apk` + `SHA256SUMS`. La version vient du tag (code de version calculé). Le tag `android-v0.1.0` a été déplacé une fois de `93c3c14` à `d189e5a` parce que sa release avait échoué sans rien publier ; ne jamais déplacer un tag dont la release existe.
+
+| Version | Contenu |
+|---|---|
+| 0.1.0 | Première dictée signée (insertion API33 stricte) |
+| 0.1.1 | Raison du refus de cible affichée |
+| 0.1.2 | Type de saisie : classe + variation (Keep) |
+| 0.1.3 | Relecture de confirmation ; bulle libérée après succès |
+| 0.1.4 | Raisons détaillées ; Copier ne masque plus le résultat |
+| 0.1.5 | Confirmation par relecture malgré les événements |
+| 0.1.6 | Copie automatique de secours ; historique des 5 derniers textes |
+| 0.1.7 | Événements des autres applis ignorés |
+| 0.1.8 | Refonte : décision unique à l’arrêt sur lectures fraîches, composition préservée, sélection jamais remplacée, bulle toujours prête |
 
 ## Périmètre déjà validé par le mainteneur
 
 - Français et anglais ; traitement local, sans cloud/API payante/analytics. Modèles préparés explicitement, jamais embarqués dans Git/APK.
-- Dictée jusqu’à 15 min, sans arrêt sur silence : bulle, démarrage/arrêt utilisateur puis insertion au curseur ; overlay et accessibilité acceptés, Gboard conservé.
+- Dictée jusqu’à 15 min (usage réel visé : 5 à 10 min), sans arrêt sur silence : bulle, démarrage/arrêt utilisateur puis insertion au curseur ; overlay et accessibilité acceptés, Gboard conservé. Plusieurs dictées de suite, dans toutes les applis possibles.
+- **Ne jamais perdre une dictée** : en cas d’échec, copie automatique dans le presse-papiers (accepté le 31/10/2026, même si elle remplace le clip précédent) et historique dans l’app.
 - Mode distinct : réunion jusqu’à 2 h, enregistrement puis transcription et résumé local. Le résumé actuellement développé est **extractif**, à partir de phrases originales horodatées, pas un LLM génératif.
-- Objectif final : APK signé téléchargeable, que le mainteneur testera lui-même sur son Pixel. Le feu vert fonctionnel existait déjà ; la pause actuelle est liée au quota et au relais, pas à une question de périmètre en attente.
+- le mainteneur télécharge les APK depuis les releases GitHub et teste lui-même sur son Pixel ; il renvoie des captures d’écran.
 
-Voir [le périmètre](mvp.md), [l’architecture](architecture.md), [la CI](ci.md), `docs/meeting.md` sur sa branche et [la recette Pixel](acceptation-pixel.md).
+Voir [le périmètre](mvp.md), [l’architecture](architecture.md), [l’insertion](insertion.md), [la CI](ci.md) et [la recette Pixel](acceptation-pixel.md).
 
-## Preuves disponibles — ne pas les étendre aux WIP
+## Branches
 
-- Première dictée : **76 tests JVM/activité**, sans échec/erreur/ignoré ; rapports initialement produits par la lane puis recomptés par le parent avant les corrections API33. Tests/lint/APK debug + release minifiée non signée avaient réussi. Historique détaillé : `git show e5d7db3:docs/status.md`.
-- Noyau réunion pur : **36 tests JVM**, rerun indépendant du parent réussi, Kotlin 2.1.0 / JUnit 4.13.2, heap test 64 Mio. Voir `docs/meeting.md` dans `work/meeting-core` ; cela n’établit pas 2 h de capture sur téléphone.
-- Outillage de release/inspection : **8 tests Python** réussis et workflows vérifiés par actionlint.
-- Dernière CI distante verte vérifiée avant ces extensions : `302301b84b3c909daf0c1d6a48fbcdd70a0a0830`, https://github.com/juliendevelopment/localdictate/actions/runs/41108473585 . Elle ne valide pas les WIP ni la dictée complète.
-- Les dernières sessions ont été interrompues volontairement. Leurs reçus de sortie non nulle ne sont pas un diagnostic de bug et ne doivent pas lancer un nouveau Codex automatiquement. **Rejouer les validations sur le code réconcilié.**
+- **`main`** : dictée complète publiée (voir releases).
+- **`work/dictation`** : fusionnée dans `main` (commit `4cfe9c1`).
+- **`work/meeting-core`** — noyau validé `fd84d93`, puis point d’intégration WIP `d4083376741af126f3492eebaf314addc027b10b` : stockage audio/journal/résumé extractif plus contrôleur, pipeline, dépôt, service et export commencés. Branchement UI/manifest/tests et transitions à terminer/revoir ; ne pas supposer cette branche compilable. Worktree VPS : `<private folder>`. À réconcilier avec `MicrophoneCapture`, les contrôleurs et l’UI de `main`, pas par « ours/theirs ».
 
-## Points de revue prioritaires
+## Points de revue toujours ouverts
 
-1. Android refuse généralement la lecture du presse-papiers sans focus avec un autre clavier. Ne pas contourner ce problème par une restauration/vidange aveugle ou un collage susceptible de remplacer la copie de l’utilisateur.
-2. API33 : `AccessibilityServiceInfo.FLAG_INPUT_METHOD_EDITOR`, `AccessibilityService.getInputMethod()`, puis `AccessibilityInputConnection.commitText(text, 1, null)` sans remplacer Gboard. Vérifier le vrai contexte/éditeur et la sélection **après** vidage ASR. Une composition Gboard active peut être remplacée par commitText : elle doit être détectée/refusée. Aucune action destructive pour « réparer » une dérive.
-3. Une seule tentative persistée ; vérifier fraîchement texte attendu et curseur. Une commande envoyée n’est pas une insertion observée. Cible/password/contexte ambigu : garder le texte et proposer Copier explicitement. Aucun nettoyage automatique du presse-papiers.
-4. FGS microphone armé depuis Activity visible, micro fermé au repos, arrêt/revocation/mute/notification accessibles. Pas de service recréé silencieusement depuis une ancienne commande.
-5. Réunion : un seul verrou d’usage partagé avec préparation/dictée ; audio app-private borné sur disque, capture d’abord puis ASR réel en flux, timestamps issus de l’audio. Ne pas perdre la transcription si résumé/export échoue ; aucune réparation de journal silencieuse.
+1. Insertion : les risques restants listés dans `insertion.md` (composition antérieure non rapportée, champs web, éditeurs recréés, Android 29–32).
+2. FGS microphone armé depuis Activity visible, micro fermé au repos, arrêt/révocation/mute/notification accessibles. Pas de service recréé silencieusement depuis une ancienne commande.
+3. Réunion : un seul verrou d’usage partagé avec préparation/dictée ; audio app-private borné sur disque, capture d’abord puis ASR réel en flux, timestamps issus de l’audio. Ne pas perdre la transcription si résumé/export échoue.
 
-## Reprise et livraison
+## Validation locale
 
-Sur le VPS, poursuivre dans les worktrees existants ou fusionner les branches dans le checkout canonique après revue. Conserver les modèles/chemins, l’application `be.arte.localdictate`, la signature et les réglages. Ne pas réécrire l’historique ou publier les WIP comme release.
-
-Validation locale, avec SDK existant et JDK17 :
+Avec SDK existant et JDK17 :
 
 ```sh
 cd ~/dev/sources/localdictate
@@ -62,12 +76,10 @@ export TMPDIR=$TMPDIR
 python3 -m unittest discover -s scripts -p 'test_*.py'
 ```
 
-RAM/swap limitées : pas de builds/modèles en parallèle. Verrou partagé sur ce VPS : `$TMPDIR`. Le mode cache Robolectric optionnel est documenté dans `docs/ci.md`.
+Environ 5 min par build complet. RAM/swap limitées : pas de builds/modèles en parallèle. Le mode cache Robolectric optionnel est documenté dans `docs/ci.md`.
 
-La clé dédiée existe **hors Git/vault** sous `<private key folder>`, permissions 0700/0600 ; secrets `SIGNING_*` déjà configurés sur ce dépôt. Ne pas recréer/réutiliser une autre clé et ne jamais afficher les valeurs. Le script propriétaire `<private folder> --version 0.1.0` peut lancer tests/lint/build signé et inspection statique sur un checkout canonique propre ; il n’a pas encore mené une livraison complète. Les workflows de tag doivent recevoir un commit `main` vert au SHA exact et les notes de release correspondantes. Télécharger le vrai APK distant et vérifier checksum/certificat/package/version/ABI avant de donner son lien à le mainteneur.
-
-Les artefacts de coordination non secrets sont dans `<private folder>` (reçus, journaux, briefs, `owner-state.json`). La phase y est `paused_by_user_quota_handoff`.
+La clé dédiée existe **hors Git/vault** sous `<private key folder>`, permissions 0700/0600 ; secrets `SIGNING_*` configurés sur ce dépôt. Ne pas recréer/réutiliser une autre clé et ne jamais afficher les valeurs. `<private folder> --version X.Y.Z` construit et inspecte un APK signé local (98 tests, inspection statique réussie le 30/10/2026) ; les livraisons à le mainteneur passent par les releases GitHub.
 
 ## Toujours non vérifié sur téléphone
 
-JNI réel, qualité FR/EN, interaction Gboard et insertion multi-apps, maintien du FGS/micro, mode avion puis retour de connectivité, durée réelle 15 min/2 h, mémoire, latence, batterie et chauffe. Aucun test hôte ne doit être présenté comme cette recette Pixel.
+Insertion multi-apps (seul Keep essayé), fiabilité de l’insertion v0.1.8, qualité anglaise, dictées de 5–15 min, maintien du FGS/micro, mode avion puis retour de connectivité, mémoire, latence, batterie et chauffe, Android 29–32. Aucun test hôte ne doit être présenté comme cette recette Pixel.

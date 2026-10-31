@@ -1,6 +1,6 @@
 # LocalDictate — règles du projet
 
-Lire `docs/mvp.md`, `docs/architecture.md`, `docs/ci.md`, `docs/status.md` avant toute implémentation. Le besoin est une dictée personnelle locale FR/EN et un second mode réunion ; ce n’est pas la continuation de un projet voisin.
+Lire `docs/mvp.md`, `docs/architecture.md`, `docs/ci.md`, `docs/status.md` avant toute implémentation, et `docs/insertion.md` avant de toucher à l’insertion (journal des essais Pixel et raisons des règles). Le besoin est une dictée personnelle locale FR/EN et un second mode réunion ; ce n’est pas la continuation de un projet voisin.
 
 ## Invariants
 

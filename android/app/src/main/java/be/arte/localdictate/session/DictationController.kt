@@ -34,6 +34,8 @@ data class DictationState(
     val durationMs: Long = 0,
     val error: String? = null,
     val history: List<String> = emptyList(),
+    /** Short outcome shown under the bubble after a dictation that was not inserted. */
+    val notice: String? = null,
 )
 
 class DictationController(private val app: Application) {
@@ -107,9 +109,8 @@ class DictationController(private val app: Application) {
             }
         }
     }
-    fun remember(text: String) {
-        runCatching { historyStore.add(text) }.onSuccess { items -> update { it.copy(history = items) } }
-    }
+    fun remember(text: String): Boolean =
+        runCatching { historyStore.add(text) }.onSuccess { items -> update { it.copy(history = items) } }.isSuccess
     fun clearHistory() {
         runCatching { historyStore.clear() }.onSuccess { update { it.copy(history = emptyList()) } }
     }

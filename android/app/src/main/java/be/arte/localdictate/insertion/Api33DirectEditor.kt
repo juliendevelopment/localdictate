@@ -31,25 +31,34 @@ internal object Api33DirectEditor {
                     method.currentInputEditorInfo === info && method.currentInputConnection != null &&
                     EditorIdentity(info.packageName.orEmpty(), info.fieldId, info.fieldName, info.inputType, viewId) == identity
             }
-            override fun canCommit(start: Int, end: Int): Boolean {
+            override fun canCommit(context: EditorSurrounding): Boolean {
+                if (!isCurrent()) return false
                 val range = method.observed
-                return isCurrent() && range.known && range.start == start && range.end == end &&
-                    range.composingStart == -1 && range.composingEnd == -1
+                // No selection report since the input started: nothing was composed since then.
+                if (!range.known) return context.composingStart < 0 && context.composingEnd < 0
+                return range.start == context.start && range.end == context.end &&
+                    range.composingStart == context.composingStart && range.composingEnd == context.composingEnd
             }
             override fun surrounding(): EditorSurrounding? {
                 val context = connection.getSurroundingText(DirectContextPolicy.MAX_FIELD_LENGTH,
                     DirectContextPolicy.MAX_FIELD_LENGTH, InputConnection.GET_TEXT_WITH_STYLES) ?: return null
                 val text = context.text
                 val range = method.observed
-                val composing = !range.known || range.composingStart != -1 || range.composingEnd != -1 ||
-                    (text is Spanned && (
+                // The keyboard reports each composition through onUpdateSelection. Unknown here means no report
+                // since the input started, so no composition was set since then (sessions start without one).
+                val placed = range.known && range.composingStart >= 0 && range.composingEnd >= range.composingStart
+                val marked = text is Spanned && (
                     (text is Spannable && (BaseInputConnection.getComposingSpanStart(text) >= 0 ||
                         BaseInputConnection.getComposingSpanEnd(text) >= 0)) ||
                     text.getSpans(0, text.length, Any::class.java).any {
                         text.getSpanFlags(it) and Spanned.SPAN_COMPOSING != 0
-                    }))
+                    })
+                // Reports that disagree with the editor's own selection cannot locate a composition.
+                val stale = range.known && (range.start != context.selectionStart || range.end != context.selectionEnd)
                 return EditorSurrounding(text.toString(), context.selectionStart, context.selectionEnd,
-                    context.offset, composing)
+                    context.offset, composing = (marked && !placed) || (stale && (placed || marked)),
+                    composingStart = if (placed) range.composingStart else -1,
+                    composingEnd = if (placed) range.composingEnd else -1)
             }
             override fun commit(text: String) = connection.commitText(text, 1, null)
             override fun describe(): String {

@@ -83,26 +83,34 @@ class Api33DirectEditorTest {
         val text = SpannableString("abc def")
         text.setSpan(android.text.style.UnderlineSpan(), 0, 3, Spanned.SPAN_COMPOSING or Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         InputConnectionShadow.context = SurroundingText(text, 3, 3, 0)
-        assertTrue(session.surrounding()!!.composing)
+        assertTrue(session.surrounding()!!.composing) // A marker without a reported position is refused.
         val marked = SpannableString("abc def")
         BaseInputConnection.setComposingSpans(marked)
         (InputServiceShadow.method as GuardedInputMethod).onUpdateSelection(3, 3, 3, 3, 0, 3)
         InputConnectionShadow.context = SurroundingText(marked, 3, 3, 0)
-        assertTrue(session.surrounding()!!.composing)
+        val placed = session.surrounding()!!
+        assertFalse(placed.composing) // Reported by the keyboard: its position is known and kept intact.
+        assertEquals(0, placed.composingStart); assertEquals(3, placed.composingEnd)
         assertTrue(InputConnectionShadow.commits.isEmpty())
     }
-    @Test fun unknownOrLateComposingRangeBlocksEvenWhenParcelableContextLosesMarker() {
+    @Test fun lateCompositionBlocksTheCommitAndARestartedInputStartsWithoutOne() {
         val session = Api33DirectEditor.acquire(service)!!
         val method = InputServiceShadow.method as GuardedInputMethod
-        assertTrue(session.canCommit(3, 3))
-        method.onUpdateSelection(3, 3, 3, 3, 0, 3)
-        assertFalse(session.canCommit(3, 3))
-        assertTrue(session.surrounding()!!.composing)
+        val read = session.surrounding()!!
+        assertTrue(session.canCommit(read))
+        method.onUpdateSelection(3, 3, 3, 3, 0, 3) // Composition appears after the read.
+        assertFalse(session.canCommit(read))
+        val composed = session.surrounding()!!
+        assertEquals(0, composed.composingStart); assertTrue(session.canCommit(composed))
         method.onStartInput(InputMethodShadow.info!!, true)
         assertFalse(session.isCurrent()) // Same EditorInfo reference still invalidated by generation.
         val rebound = Api33DirectEditor.acquire(service)!!
-        assertFalse(rebound.canCommit(3, 3))
-        assertTrue(rebound.surrounding()!!.composing)
+        val fresh = rebound.surrounding()!!
+        assertFalse(fresh.composing); assertEquals(-1, fresh.composingStart)
+        assertTrue(rebound.canCommit(fresh))
+        method.onUpdateSelection(3, 3, 3, 3, 0, 3)
+        assertFalse(rebound.canCommit(fresh))
+        assertTrue(InputConnectionShadow.commits.isEmpty())
     }
     @Test fun nullAndTruncatedContextAreNotInventedOrRepaired() {
         val session = Api33DirectEditor.acquire(service)!!

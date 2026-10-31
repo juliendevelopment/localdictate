@@ -64,7 +64,7 @@ class FloatingControl(context: Context, onTap: () -> Unit, onClose: () -> Unit) 
     fun render(state: DictationState) {
         val phase = state.phase
         status.text = state.error ?: if (state.transcript.isNotEmpty() && phase == Phase.ARMED)
-            "Texte conservé • ouvrir pour vérifier" else ""
+            "Texte conservé • ouvrir pour vérifier" else state.notice.orEmpty()
         status.visibility = if (status.text.isEmpty()) View.GONE else View.VISIBLE
         toggle.text = when (phase) {
             Phase.LOADING -> "Chargement…"

@@ -79,11 +79,12 @@ class InsertionServiceTest {
         var commits = 0
         var readEffect: (() -> Unit)? = null
         var commitEffect: ((String) -> Unit)? = null
+        val sent = mutableListOf<String>()
         override fun isCurrent() = current
-        override fun canCommit(start: Int, end: Int) = current && commitAllowed
+        override fun canCommit(context: EditorSurrounding) = current && commitAllowed
         override fun surrounding(): EditorSurrounding? { reads++; readEffect?.invoke(); return context }
         override fun commit(text: String) {
-            commits++
+            commits++; sent += text
             val action = commitEffect
             if (action != null) action(text) else observe(text)
         }
@@ -108,21 +109,48 @@ class InsertionServiceTest {
         noClipboardOrNodeAction()
         assertEquals("À garder", clipboard.primaryClip!!.getItemAt(0).text.toString())
     }
-    @Test fun selectionReplacementUsesUtf16AndPreservesUnselectedText() = runTest(dispatcher) {
-        node.text = "😀 abc fin"
+    @Test fun selectedTextIsNeverReplaced() = runTest(dispatcher) {
+        assertTrue(service.snapshot())
         node.setTextSelection(3, 6)
         editor.context = EditorSurrounding(node.text.toString(), 3, 6, 0, false)
-        assertTrue(service.snapshot())
-        assertTrue(service.insert("Hello🌍").contains("Insertion observée"))
-        assertEquals("😀 Hello🌍 fin", node.text.toString())
-        assertEquals(10, node.textSelectionEnd)
+        assertTrue(service.insert("Hello").contains("rien n’est remplacé"))
+        assertEquals(0, editor.commits); assertEquals("abc def", node.text.toString())
         noClipboardOrNodeAction()
+    }
+    @Test fun collapsedCursorAfterEmojiUsesUtf16() = runTest(dispatcher) {
+        node.text = "😀 abc fin"
+        node.setTextSelection(3, 3)
+        editor.context = EditorSurrounding(node.text.toString(), 3, 3, 0, false)
+        assertTrue(service.snapshot())
+        assertTrue(service.insert("Hello🌍 ").contains("Insertion observée"))
+        assertEquals("😀 Hello🌍 abc fin", node.text.toString())
+        assertEquals(11, node.textSelectionEnd)
+        noClipboardOrNodeAction()
+    }
+    @Test fun knownKeyboardCompositionAroundTheCursorIsKeptIntact() = runTest(dispatcher) {
+        // Gboard composes "abc"; commitText replaces that region, so it is re-sent around the dictation.
+        editor.context = EditorSurrounding("abc def", 3, 3, 0, false, composingStart = 0, composingEnd = 3)
+        editor.commitEffect = { sent ->
+            node.text = sent + node.text.toString().substring(3)
+            node.setTextSelection(sent.length, sent.length)
+        }
+        assertTrue(service.snapshot())
+        assertTrue(service.insert(" Bonjour").contains("Insertion observée"))
+        assertEquals(listOf("abc Bonjour"), editor.sent)
+        assertEquals("abc Bonjour def", node.text.toString())
+        noClipboardOrNodeAction()
+    }
+    @Test fun compositionAwayFromTheCursorIsRefused() = runTest(dispatcher) {
+        editor.context = EditorSurrounding("abc def", 3, 3, 0, false, composingStart = 4, composingEnd = 7)
+        assertTrue(service.snapshot())
+        assertTrue(service.insert("Bonjour").contains("hors du curseur"))
+        assertEquals(0, editor.commits)
     }
     @Test fun unsupportedDirectEditorDoesNotFallBackToSupportedPaste() = runTest(dispatcher) {
         node.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_PASTE)
         service.directEditor = DirectEditor { null }
         assertFalse(service.snapshot())
-        assertTrue(service.insert("bonjour").contains("Copier"))
+        assertTrue(service.insert("bonjour").contains("refusée"))
         noClipboardOrNodeAction()
     }
     @Test fun unreadableClipboardDoesNotPreventDirectCommitAndIsNeverAccessed() = runTest(dispatcher) {
@@ -131,20 +159,29 @@ class InsertionServiceTest {
         assertTrue(service.insert(" Bonjour").contains("Insertion observée"))
         noClipboardOrNodeAction()
     }
-    @Test fun changedTextBlocks() = runTest(dispatcher) {
+    @Test fun fieldEditedDuringDictationGetsTheTextAtItsCurrentCursor() = runTest(dispatcher) {
+        assertTrue(service.snapshot())
+        node.text = "abc defgh"; node.setTextSelection(9, 9)
+        editor.context = EditorSurrounding("abc defgh", 9, 9, 0, false)
+        assertTrue(service.insert(" Bonjour").contains("Insertion observée"))
+        assertEquals("abc defgh Bonjour", node.text.toString())
+    }
+    @Test fun fieldAndEditorDisagreeingBlocks() = runTest(dispatcher) {
         assertTrue(service.snapshot()); node.text = "changed"
-        assertTrue(service.insert("Bonjour").contains("modifié")); assertEquals(0, editor.commits)
+        assertTrue(service.insert("Bonjour").contains("insertion annulée")); assertEquals(0, editor.commits)
         noClipboardOrNodeAction()
     }
     @Test fun changedSelectionBlocks() = runTest(dispatcher) {
         assertTrue(service.snapshot()); node.setTextSelection(0, 0)
         service.insert("Bonjour"); assertEquals(0, editor.commits); noClipboardOrNodeAction()
     }
-    @Test fun reboundSameIdSameContentEditorBlocks() = runTest(dispatcher) {
+    @Test fun inputRestartedOnTheSameFieldUsesTheFreshEditor() = runTest(dispatcher) {
         assertTrue(service.snapshot())
-        editor.current = false // Native adapter separately tests reference identity on equal EditorInfo objects.
-        service.directEditor = DirectEditor { FixtureEditor() }
-        service.insert("Bonjour"); assertEquals(0, editor.commits); noClipboardOrNodeAction()
+        editor.current = false // The keyboard or the app restarted input during the dictation.
+        val fresh = FixtureEditor()
+        service.directEditor = DirectEditor { fresh }
+        assertTrue(service.insert(" Bonjour").contains("Insertion observée"))
+        assertEquals(0, editor.commits); assertEquals(1, fresh.commits)
     }
     @Test fun replacedFocusedNodeWithSameValuesIsNotTheOriginalTarget() = runTest(dispatcher) {
         assertTrue(service.snapshot())
@@ -258,12 +295,7 @@ class InsertionServiceTest {
     }
     @Test fun missingAccessibilityKeepsTextWithoutCommit() = runTest(dispatcher) {
         assertTrue(service.snapshot()); service.onUnbind(null)
-        assertTrue(service.insert("Bonjour").contains("Copier")); assertEquals(0, editor.commits)
-    }
-    @Test fun windowChangeBeforeCommitPermanentlyInvalidatesTarget() = runTest(dispatcher) {
-        assertTrue(service.snapshot())
-        service.onAccessibilityEvent(AccessibilityEvent.obtain(AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED))
-        service.insert("Bonjour"); assertEquals(0, editor.commits)
+        assertTrue(service.insert("Bonjour").contains("refusée")); assertEquals(0, editor.commits)
     }
     @Test fun systemUiWindowEventsDoNotCancelAnUnchangedTarget() = runTest(dispatcher) {
         assertTrue(service.snapshot())
@@ -271,11 +303,12 @@ class InsertionServiceTest {
             .apply { packageName = "com.android.systemui" })
         assertTrue(service.insert("Bonjour").contains("Insertion observée"))
     }
-    @Test fun targetAppWindowEventStillCancelsTheTarget() = runTest(dispatcher) {
+    @Test fun eventsNeverDecideAloneTheFreshFieldDoes() = runTest(dispatcher) {
+        // Phones emit focus/window events from the target app itself during a dictation (Keep, Gboard).
         assertTrue(service.snapshot())
-        service.onAccessibilityEvent(AccessibilityEvent.obtain(AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED)
-            .apply { packageName = "fixture.notes" })
-        service.insert("Bonjour"); assertEquals(0, editor.commits)
+        for (type in listOf(AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED, AccessibilityEvent.TYPE_VIEW_FOCUSED))
+            service.onAccessibilityEvent(AccessibilityEvent.obtain(type).apply { packageName = "fixture.notes" })
+        assertTrue(service.insert("Bonjour").contains("Insertion observée"))
     }
     @Test fun genericWindowsChangedEventsAloneDoNotCancelAnUnchangedTarget() = runTest(dispatcher) {
         // Keyboard and overlay windows change during a long dictation; the field itself is re-verified.

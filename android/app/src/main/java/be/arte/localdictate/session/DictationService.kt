@@ -104,9 +104,9 @@ class DictationService : Service() {
         val startRefusal = if (hasTarget) "" else targetService?.lastRefusal.orEmpty()
         val recorder = MicrophoneCapture(applicationContext)
         microphone = recorder
-        controller.update { it.copy(phase = Phase.RECORDING, durationMs = 0, error = null,
+        controller.update { it.copy(phase = Phase.RECORDING, durationMs = 0, error = null, notice = null,
             message = if (hasTarget) "Dictée locale. Les pauses ne terminent pas la session."
-                else "Aucune cible compatible : dictée conservée ici, copie manuelle après arrêt.") }
+                else "Aucun champ compatible : la dictée sera copiée dans le presse-papiers à l’arrêt.") }
         sessionJob = scope.launch {
             var id: String? = null
             var detector: SileroSegmenter? = null
@@ -142,25 +142,34 @@ class DictationService : Service() {
                 val interrupted = failure != null || controller.state.value.error != null
                 val record = withContext(Dispatchers.IO) { controller.journal.finish(sessionId, interrupted) }
                 completed = true
+                // Saved before any insertion attempt: a dictated text is never only in the target field.
+                val remembered = record.text.isNotBlank() && controller.remember(record.text)
                 val message = when {
                     interrupted -> "Dictée interrompue ou surchargée : vérifiez le texte récupéré, aucun collage automatique."
                     record.text.isBlank() -> "Aucune parole reconnue. Vous pouvez réessayer."
-                    !hasTarget || targetService !== InsertionService.connected -> "Transcription conservée : cible indisponible (${startRefusal.ifBlank { "service d’accessibilité non connecté" }}). Utilisez Copier."
+                    !hasTarget || targetService !== InsertionService.connected ->
+                        "Pas de champ compatible au démarrage (${startRefusal.ifBlank { "service d’accessibilité non connecté" }})."
                     else -> {
                         val claimed = withContext(Dispatchers.IO) { controller.journal.claimInsertion(sessionId) }
                         if (claimed) targetService!!.insert(record.text) else "Insertion déjà tentée ou interrompue : vérifiez le champ."
                     }
                 }
-                if (record.text.isNotBlank()) controller.remember(record.text)
                 if (message == InsertionService.OBSERVED) {
                     // Inserted and observed: nothing left to recover, so the next dictation can start.
                     withContext(NonCancellable + Dispatchers.IO) { controller.journal.clear() }
-                    controller.update { it.copy(transcript = "", message = "Texte inséré dans le champ.") }
-                } else {
-                    // Not confirmed: copy automatically so the text can be pasted; it also stays in the history.
-                    val copied = record.text.isNotBlank() && runCatching { PrivateClipboard(applicationContext).put(record.text) }.isSuccess
-                    controller.update { it.copy(message = if (copied) "$message Texte copié dans le presse-papiers : collez-le (appui long)." else message) }
-                }
+                    controller.update { it.copy(transcript = "", notice = null, message = "Texte inséré dans le champ.") }
+                } else if (record.text.isNotBlank()) {
+                    // Not confirmed: copy automatically so the text can be pasted by hand.
+                    val copied = runCatching { PrivateClipboard(applicationContext).put(record.text) }.isSuccess
+                    // The text is in the history (and the clipboard): free the bubble for the next dictation.
+                    val released = remembered && !interrupted &&
+                        runCatching { withContext(NonCancellable + Dispatchers.IO) { controller.journal.clear() } }.isSuccess
+                    controller.update { it.copy(
+                        transcript = if (released) "" else it.transcript,
+                        notice = if (copied) "Non inséré • texte copié, collez-le" else "Non inséré • texte dans l’app",
+                        message = message + (if (copied) " Texte copié dans le presse-papiers : collez-le (appui long)." else "") +
+                            (if (remembered) " Il reste dans les derniers textes dictés." else "")) }
+                } else controller.update { it.copy(message = message) }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: OutOfMemoryError) { controller.update { it.copy(error = "Mémoire insuffisante, texte reconnu conservé.") } }
             catch (_: Throwable) { controller.update { it.copy(error = "Dictée interrompue : texte reconnu conservé, copie manuelle disponible.") } }

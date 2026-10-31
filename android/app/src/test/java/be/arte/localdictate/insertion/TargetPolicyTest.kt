@@ -46,4 +46,13 @@ class TargetPolicyTest {
             contentHash = TargetPolicy.hash("")), keep, context))
         assertFalse(DirectContextPolicy.sameEditor(target.copy(inputType = 704513), keep.copy(inputType = 2801665 or 0x80)))
     }
+    @Test fun commitPlanKeepsEveryExistingCharacter() {
+        val plain = DirectContextPolicy.plan(EditorSurrounding("abc def", 3, 3, 0, false), " X")!!
+        assertEquals(CommitPlan(" X", "abc X def", 5), plain)
+        // Cursor inside a composed word: the whole composition is re-sent with the dictation inside it.
+        val inside = DirectContextPolicy.plan(EditorSurrounding("abc def", 2, 2, 0, false, 0, 3), "X")!!
+        assertEquals(CommitPlan("abXc", "abXc def", 4), inside)
+        assertNull(DirectContextPolicy.plan(EditorSurrounding("abc def", 3, 5, 0, false), "X"))
+        assertNull(DirectContextPolicy.plan(EditorSurrounding("abc def", 3, 3, 0, false, 4, 7), "X"))
+    }
 }

@@ -24,7 +24,7 @@ Les deux modes font partie de la cible ; la priorité d’implémentation est la
 
 La chaîne dictée réelle est raccordée : préparation Parakeet/Silero, service microphone armé depuis l’activité visible, bulle, capture/segmentation/reconnaissance, transcription privée et insertion sous conditions. La réunion reste indisponible. Les cases ci-dessous restent des critères **téléphone** : elles ne sont pas cochées par des fixtures JVM.
 
-L’insertion automatique passe par la connexion d’édition d’accessibilité sur API 33+, sans presse-papiers ni remplacement de Gboard. Elle requiert une cible et une session inchangées, un contexte complet observable et aucune composition active ou inconnue. Sur API 29–32 ou un éditeur incompatible, le texte reste disponible pour copie manuelle explicite. Voir [l’architecture](architecture.md) et [la checklist Pixel](acceptation-pixel.md). Le son en RAM reste perdu après mort du processus.
+L’insertion automatique passe par la connexion d’édition d’accessibilité sur API 33+, sans remplacement de Gboard. À l’arrêt, elle requiert le même champ au focus, un contexte complet observable, un curseur sans sélection, et préserve un mot en composition ; rien n’est remplacé. Sinon (ou sur API 29–32), le texte est copié automatiquement dans le presse-papiers et reste dans l’historique des 5 derniers textes ; la bulle reste prête. Détails et essais Pixel : [insertion.md](insertion.md). Voir [l’architecture](architecture.md) et [la checklist Pixel](acceptation-pixel.md). Le son en RAM reste perdu après mort du processus.
 
 ## Acceptation dictée
 
@@ -32,7 +32,7 @@ L’insertion automatique passe par la connexion d’édition d’accessibilité
 - [ ] Permission microphone et service foreground microphone, notification/arrêt visibles ; rien ne démarre à l’ouverture de l’app.
 - [ ] FR/EN reconnus par un vrai modèle, sans appel réseau pendant l’usage.
 - [ ] Une pause n’arrête pas la session ; une limite atteinte arrête la capture puis finalise le texte accepté sans troncature silencieuse.
-- [ ] Insertion au curseur ou remplacement de la seule sélection explicitement ciblée ; le reste du champ est conservé.
+- [ ] Insertion au curseur ; une sélection n’est jamais remplacée ; le reste du champ est conservé.
 - [ ] Mot de passe/champ incompatible, cible changée ou application fermée : aucun écrasement, texte récupérable, repli explicite.
 - [ ] Une session de 15 min reste bornée en RAM et ne perd pas les segments acceptés.
 - [ ] Validations réelles sur le Pixel, au minimum dans quelques applications natives et un champ web ; pas de promesse « toutes les apps ».

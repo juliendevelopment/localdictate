@@ -153,7 +153,7 @@ private fun HomeScreen(
                 SetupRow("Bulle au-dessus des apps", ready.overlay, overlay, "setup-overlay")
                 SetupRow("Notifications visibles", ready.notifications, notifications, "setup-notifications")
                 SetupRow("Insertion par accessibilité", ready.accessibility, { disclosure = true }, "setup-accessibility")
-                Text("Insertion directe sans presse-papiers sur Android 13+ (API 33), avec Gboard conservé. Insertion non confirmée (cible modifiée, composition, éditeur incompatible) : le texte est copié automatiquement dans le presse-papiers, ce qui remplace le clip précédent, et reste dans l’historique des 5 derniers textes. Le marquage sensible masque l’aperçu, sans protéger l’accès.")
+                Text("Insertion directe au curseur sur Android 13+ (API 33), avec Gboard conservé : rien n’est remplacé, un mot en cours de frappe reste intact, jamais dans un mot de passe. Si l’insertion n’est pas confirmée (autre champ, texte sélectionné, éditeur incompatible), le texte est copié automatiquement dans le presse-papiers, ce qui remplace le clip précédent, et la bulle reste prête. Chaque dictée est gardée dans les 5 derniers textes. Le marquage sensible masque l’aperçu, sans protéger l’accès.")
             }
             if (state.transcript.isNotEmpty() || state.error != null) {
                 HorizontalDivider()
