@@ -2,7 +2,7 @@
 
 ## Situation on 31 October 2026
 
-**Dictation** ships as signed APKs on GitHub releases (`android-v0.1.0` to `android-v0.2.0`), installed and tested by the maintainer on a Pixel with Google Keep, a messaging app and Gboard. The **meeting** mode is not in these APKs (`work/meeting-core` is not merged).
+**Dictation** ships as signed APKs on GitHub releases. Versions 0.1.0 to 0.2.0 were published while the repository was private (kept in a private archive with the original history); the public repository starts with **v0.2.1**, same app as 0.2.0 plus the Apache 2.0 license and English documentation. The app is installed and tested by the maintainer on a Pixel with Google Keep, a messaging app and Gboard. The **meeting** mode is not in these APKs (`work/meeting-core` is not merged).
 
 Verified on the phone:
 
@@ -24,7 +24,7 @@ Insertion used to fail because of a design error (requiring a "frozen world" dur
 
 ## Releases
 
-Procedure: [ci.md](ci.md#releases). The tag `android-v0.1.0` was moved once (from `93c3c14` to `d189e5a`) because its release had failed without publishing anything; never move a tag whose release exists.
+Procedure: [ci.md](ci.md#releases). Never move a tag whose release exists. Versions up to 0.2.0 were released before the repository became public; their tags and APKs are not in this repository.
 
 | Version | Content |
 |---|---|
@@ -39,6 +39,7 @@ Procedure: [ci.md](ci.md#releases). The tag `android-v0.1.0` was moved once (fro
 | 0.1.8 | Redesign: single decision at stop on fresh reads, composition kept, selection never replaced, bubble always ready. **Insertion confirmed on the phone** |
 | 0.1.9 | Microphone opened on tap (Silero loaded in parallel), segments widened by 0.3 s, forced cut at 20 s instead of 8 s |
 | 0.2.0 | New bubble (square at rest, ✕/level/✓ pill, drag onto ✕ to hide, comes back on wake); ✕ cancels without inserting but keeps the text |
+| 0.2.1 | First public release: Apache 2.0 license, English documentation |
 
 ## Agreed scope
 
@@ -52,8 +53,8 @@ See the [scope](mvp.md), [architecture](architecture.md), [insertion](insertion.
 ## Branches
 
 - **`main`**: published dictation (see releases).
-- **`work/dictation`**: merged into `main` (commit `4cfe9c1`).
-- **`work/meeting-core`**: validated core `fd84d93`, then WIP integration point `d4083376741af126f3492eebaf314addc027b10b`: audio storage, journal, extractive summary, controller, pipeline, repository, service and export started. UI/manifest/tests wiring and transitions still to finish and review; do not assume this branch compiles. To be reconciled with `MicrophoneCapture`, the controllers and the UI of `main`, not with "ours/theirs".
+- **`work/dictation`**: merged into `main`.
+- **`work/meeting-core`** (not published yet, kept in the private archive): audio storage, journal, extractive summary, controller, pipeline, repository, service and export started. UI/manifest/tests wiring and transitions still to finish and review; do not assume this branch compiles. To be reconciled with `MicrophoneCapture`, the controllers and the UI of `main`, not with "ours/theirs".
 
 ## Open review points
 
