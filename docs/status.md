@@ -19,7 +19,8 @@ Vérifié sur le téléphone par le mainteneur :
 
 ## Prochaine action
 
-0. le mainteneur essaie v0.2.0 : début de phrase et mots entre deux phrases (correctif v0.1.9), puis la nouvelle bulle (rendu vérifié seulement sous Robolectric, `FloatingControlTest` ; images avec `BUBBLE_SNAPSHOTS=/dossier`).
+0. **Retour Pixel v0.2.0 (31/10/2026)** : bulle validée (« vraiment ce que je recherchais », retour visuel de la voix apprécié) ; insertion OK dans Keep et dans l’app de messagerie, y compris un texte long. Restent : (a) il faut encore attendre 1 à 2 s après le toucher avant de parler, sinon le début manque parfois (« une fois sur deux » sur les phrases courtes) ; (b) quelques erreurs de transcription, meilleures près du micro. le mainteneur utilise la v0.2.0 plusieurs jours sur des textes longs avant la suite. Pistes : mesurer sur le téléphone le délai réel entre toucher et premier son (AudioRecord, wakelock, journal), garder un court tampon audio dès le toucher ; pour la qualité, comparer niveau micro/AGC (source VOICE_RECOGNITION sans gain) et réglages Silero.
+   Ancienne consigne de test : début de phrase et mots entre deux phrases (correctif v0.1.9), puis la nouvelle bulle (rendu vérifié seulement sous Robolectric, `FloatingControlTest` ; images avec `BUBBLE_SNAPSHOTS=/dossier`).
 
 1. Faire refaire à le mainteneur avec v0.1.8 : plusieurs dictées de suite dans Keep sans toucher l’écran entre deux (note vide puis remplie), une dictée de 5 min, puis Messages et un champ web.
 2. Si un refus subsiste, lire la raison affichée (tableau dans `insertion.md`) et corriger **la règle concernée** ; ne pas réintroduire d’invalidation par événements ni d’exigence de session figée.
