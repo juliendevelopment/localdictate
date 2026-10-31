@@ -22,6 +22,8 @@ Insertion used to fail because of a design error (requiring a "frozen world" dur
 3. If an insertion refusal comes back, read the reason shown (table in `insertion.md`) and fix **that rule**; do not reintroduce event-based invalidation or frozen editor sessions.
 4. Then: 10–15 minute endurance (memory, heat), other apps (web fields), English, and the meeting branch.
 
+5. **Weekly statistics** (words, dictated time, dictations per week, app-private, shown under the history) are released in v0.2.3 but not checked on the phone yet. Next: check on the Pixel that a dictation increments the current week and that the duration matches « Durée capturée ».
+
 ## Releases
 
 Procedure: [ci.md](ci.md#releases). Never move a tag whose release exists. Versions up to 0.2.0 were released before the repository became public; their tags and APKs are not in this repository.
@@ -41,6 +43,7 @@ Procedure: [ci.md](ci.md#releases). Never move a tag whose release exists. Versi
 | 0.2.0 | New bubble (square at rest, ✕/level/✓ pill, drag onto ✕ to hide, comes back on wake); ✕ cancels without inserting but keeps the text |
 | 0.2.1 | First public release: Apache 2.0 license, English documentation |
 | 0.2.2 | Screen kept on while dictating and processing (bubble window flag) |
+| 0.2.3 | Weekly statistics: words, dictated time and dictations per week, app-private counts only |
 
 ## Agreed scope
 

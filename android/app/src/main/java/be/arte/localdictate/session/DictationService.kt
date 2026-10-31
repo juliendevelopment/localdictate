@@ -175,6 +175,9 @@ class DictationService : Service() {
                 completed = true
                 // Saved before any insertion attempt: a dictated text is never only in the target field.
                 val remembered = record.text.isNotBlank() && controller.remember(record.text)
+                if (record.text.isNotBlank()) withContext(Dispatchers.IO) {
+                    controller.count(record.text, controller.state.value.durationMs)
+                }
                 val message = when {
                     interrupted -> "Dictée interrompue ou surchargée : vérifiez le texte récupéré, aucun collage automatique."
                     record.text.isBlank() -> "Aucune parole reconnue. Vous pouvez réessayer."

@@ -65,6 +65,7 @@ class MainActivity : ComponentActivity() {
                     arm = ::arm, stop = { controller.service?.stopCapture() },
                     disarm = { controller.service?.disarm() }, copy = model.controller::copy, clear = model.controller::clear,
                     copyText = model.controller::copyText, clearHistory = model.controller::clearHistory,
+                    clearStats = model.controller::clearStats,
                     showBubble = { controller.service?.showBubble() })
             }
         }
@@ -101,7 +102,7 @@ private fun HomeScreen(
     state: DictationState, ready: Readiness, prepare: () -> Unit, cancel: () -> Unit,
     microphone: () -> Unit, notifications: () -> Unit, overlay: () -> Unit, accessibility: () -> Unit,
     arm: () -> Unit, stop: () -> Unit, disarm: () -> Unit, copy: () -> Unit, clear: () -> Unit,
-    copyText: (String) -> Unit, clearHistory: () -> Unit, showBubble: () -> Unit = {},
+    copyText: (String) -> Unit, clearHistory: () -> Unit, clearStats: () -> Unit = {}, showBubble: () -> Unit = {},
 ) {
     var meeting by rememberSaveable { mutableStateOf(false) }
     var disclosure by rememberSaveable { mutableStateOf(false) }
@@ -176,6 +177,15 @@ private fun HomeScreen(
                 }
                 TextButton(onClick = clearHistory, modifier = Modifier.testTag("history-clear")) { Text("Effacer l’historique") }
             }
+            if (state.stats.isNotEmpty() && !meeting) {
+                HorizontalDivider()
+                Text("Statistiques par semaine", style = MaterialTheme.typography.titleMedium)
+                state.stats.take(8).forEachIndexed { index, week ->
+                    Text(weekLine(week), modifier = Modifier.testTag("stats-$index"))
+                }
+                Text("Comptées sur ce téléphone uniquement, sans garder les textes.")
+                TextButton(onClick = clearStats, modifier = Modifier.testTag("stats-clear")) { Text("Effacer les statistiques") }
+            }
             Text("Pas de cloud, pas d’analytics. Aucun enregistrement automatique. Le texte reconnu reste ici jusqu’à Effacer ; le son n’est pas sauvegardé.")
             TextButton(onClick = { licenses = true }, modifier = Modifier.testTag("licenses")) { Text("Modèles, licences et limites") }
         }
@@ -199,6 +209,20 @@ private fun HomeScreen(
             TextButton(onClick = { licenses = false; notices = true }) { Text("Lire les notices complètes") }
             Text("La qualité, la mémoire et le délai sur Pixel restent à vérifier sur téléphone. L’armement garde un service microphone visible ; seul le toucher de la bulle ouvre AudioRecord.")
         } }, confirmButton = { TextButton(onClick = { licenses = false }) { Text("Fermer") } })
+}
+
+private val weekStart = java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.FRENCH)
+
+internal fun weekLine(week: WeekStats): String {
+    val seconds = week.durationMs / 1000
+    val duration = when {
+        seconds < 60 -> "$seconds s"
+        seconds < 3600 -> "${seconds / 60} min"
+        else -> "${seconds / 3600} h ${(seconds / 60 % 60).toString().padStart(2, '0')}"
+    }
+    val words = java.text.NumberFormat.getIntegerInstance(java.util.Locale.FRENCH).format(week.words)
+    return "Semaine du ${week.monday.format(weekStart)} : $words mots • $duration • " +
+        "${week.dictations} dictée${if (week.dictations > 1) "s" else ""}"
 }
 
 @Composable

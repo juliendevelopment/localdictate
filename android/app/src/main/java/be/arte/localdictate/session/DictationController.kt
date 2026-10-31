@@ -34,6 +34,8 @@ data class DictationState(
     val durationMs: Long = 0,
     val error: String? = null,
     val history: List<String> = emptyList(),
+    /** Weekly word count and dictated time, newest week first. */
+    val stats: List<WeekStats> = emptyList(),
     /** Short outcome shown under the bubble after a dictation that was not inserted. */
     val notice: String? = null,
     /** True once the microphone delivered its first audio in the current dictation. */
@@ -44,6 +46,7 @@ class DictationController(private val app: Application) {
     val models = ModelManager(app)
     val journal = TranscriptJournal(File(app.filesDir, "dictation/transcript.dat"))
     val historyStore = DictationHistory(File(app.filesDir, "dictation/history.dat"))
+    val statsStore = DictationStats(File(app.filesDir, "dictation/stats.dat"))
     private val gate = UseGate()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var preparationJob: Job? = null
@@ -53,6 +56,7 @@ class DictationController(private val app: Application) {
     val state = mutable.asStateFlow()
     init {
         runCatching { historyStore.read() }.onSuccess { items -> update { it.copy(history = items) } }
+        runCatching { statsStore.read() }.onSuccess { weeks -> update { it.copy(stats = weeks) } }
         runCatching { journal.read() }.onSuccess { record ->
             update { it.copy(transcript = record.text, message = when {
                 record.interrupted -> "Dictée interrompue : texte reconnu récupéré. Le son en attente est perdu. Aucun collage automatique après reprise."
@@ -113,6 +117,13 @@ class DictationController(private val app: Application) {
     }
     fun remember(text: String): Boolean =
         runCatching { historyStore.add(text) }.onSuccess { items -> update { it.copy(history = items) } }.isSuccess
+    /** Statistics are a rough indication: a failure here never affects the dictation itself. */
+    fun count(text: String, durationMs: Long) {
+        runCatching { statsStore.add(text, durationMs) }.onSuccess { weeks -> update { it.copy(stats = weeks) } }
+    }
+    fun clearStats() {
+        runCatching { statsStore.clear() }.onSuccess { update { it.copy(stats = emptyList()) } }
+    }
     fun clearHistory() {
         runCatching { historyStore.clear() }.onSuccess { update { it.copy(history = emptyList()) } }
     }

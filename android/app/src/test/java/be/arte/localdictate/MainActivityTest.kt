@@ -8,6 +8,8 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.lifecycle.ViewModelProvider
 import be.arte.localdictate.session.Phase
+import be.arte.localdictate.session.WeekStats
+import java.time.LocalDate
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Rule
@@ -111,5 +113,21 @@ class MainActivityTest {
         compose.onNodeWithTag("arm").assertDoesNotExist()
         compose.onNodeWithTag("stop").assertDoesNotExist()
         compose.onNodeWithTag("disarm").performScrollTo().assertIsEnabled()
+    }
+    @Test fun weeklyStatsAreShownAndCanBeCleared() {
+        compose.runOnIdle {
+            controller.statsStore.clear()
+            controller.update { it.copy(stats = emptyList()) }
+            controller.count("Bonjour tout le monde", 90_000)
+        }
+        compose.onNodeWithText("Statistiques par semaine").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("stats-0").assertTextContains("4 mots • 1 min • 1 dictée", substring = true)
+        compose.onNodeWithTag("stats-clear").performScrollTo().performClick()
+        compose.onNodeWithTag("stats-0").assertDoesNotExist()
+        compose.runOnIdle { assertTrue(controller.statsStore.read().isEmpty()) }
+    }
+    @Test fun weekLineFormatsLongTotals() {
+        assertEquals("Semaine du 26 oct. : 12\u202f345 mots • 2 h 05 • 31 dictées",
+            weekLine(WeekStats(LocalDate.of(2026, 10, 26), 12_345, 125 * 60_000L, 31)))
     }
 }
