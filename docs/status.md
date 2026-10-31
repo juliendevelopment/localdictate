@@ -1,94 +1,70 @@
-# État LocalDictate
+# LocalDictate status
 
-## Situation au 31 octobre 2026
+## Situation on 31 October 2026
 
-Dépôt privé : https://github.com/juliendevelopment/localdictate . Checkout canonique : `~/dev/sources/localdictate`. Les agents Codex de la phase précédente restent arrêtés ; ne pas les relancer.
+**Dictation** ships as signed APKs on GitHub releases (`android-v0.1.0` to `android-v0.2.0`), installed and tested by the maintainer on a Pixel with Google Keep, a messaging app and Gboard. The **meeting** mode is not in these APKs (`work/meeting-core` is not merged).
 
-La **dictée** est livrée en APK signés (releases GitHub `android-v0.1.0` à `android-v0.1.8` ; v0.1.8 publiée au SHA `0c7cae2`, APK téléchargé et vérifié : checksum, certificat `07780567…efe36`, code de version 108), installés et essayés par le mainteneur sur son Pixel avec Google Keep et Gboard. Le mode **réunion** n’est pas dans ces APK (`work/meeting-core` non fusionnée).
+Verified on the phone:
 
-Vérifié sur le téléphone par le mainteneur :
+- installation (after pausing Play Protect scanning) and in-place updates with the same key;
+- permissions, including "Allow restricted settings" for accessibility;
+- Parakeet + Silero preparation, JNI loading, good French recognition;
+- **reliable insertion at the cursor since v0.1.8**: several dictations in a row in Keep and in a messaging app, including a long text;
+- automatic copy fallback and history of the last 5 texts;
+- the v0.2.0 bubble (square at rest, ✕ | level | ✓ pill), approved by the maintainer.
 
-- installation (après désactivation temporaire de Play Protect) et mises à jour par-dessus avec la même clé ;
-- permissions, y compris « Autoriser les paramètres restreints » pour l’accessibilité ;
-- préparation des modèles Parakeet + Silero, chargement JNI, reconnaissance française correcte ;
-- bulle armée, déplaçable, ● Dicter / ■ Arrêter ;
-- insertion réelle au curseur dans Keep, mais **pas de façon fiable** jusqu’à v0.1.7 ;
-- copie automatique de secours et historique des 5 derniers textes (v0.1.6, v0.1.7).
+Insertion used to fail because of a design error (requiring a "frozen world" during the dictation), fixed by the v0.1.8 redesign. Full analysis, version-by-version test log, current rules and how to read the messages: **[insertion.md](insertion.md)**.
 
-**L’insertion échouait par une erreur de conception** (exiger un « monde figé » pendant la dictée), corrigée par la refonte v0.1.8. Analyse complète, journal des essais version par version, règles actuelles et lecture des messages : **[insertion.md](insertion.md)**.
+## Known issues and next steps
 
-## Prochaine action
+1. **Start of speech**: one still has to wait 1–2 s after tapping the bubble before speaking, otherwise the beginning is sometimes missing (about one short phrase in two). v0.1.9 already opens the microphone first. Next: measure on the phone the real delay between the tap and the first audio (AudioRecord start, wake lock, journal write), and consider keeping a short audio buffer from the tap.
+2. **Transcription errors**: some remain, fewer when speaking close to the microphone. Next: compare microphone level/AGC (the VOICE_RECOGNITION source has no gain) and Silero settings, with real sentences and their expected text.
+3. If an insertion refusal comes back, read the reason shown (table in `insertion.md`) and fix **that rule**; do not reintroduce event-based invalidation or frozen editor sessions.
+4. Then: 10–15 minute endurance (memory, heat), other apps (web fields), English, and the meeting branch.
 
-0. **Retour Pixel v0.2.0 (31/10/2026)** : bulle validée (« vraiment ce que je recherchais », retour visuel de la voix apprécié) ; insertion OK dans Keep et dans l’app de messagerie, y compris un texte long. Restent : (a) il faut encore attendre 1 à 2 s après le toucher avant de parler, sinon le début manque parfois (« une fois sur deux » sur les phrases courtes) ; (b) quelques erreurs de transcription, meilleures près du micro. le mainteneur utilise la v0.2.0 plusieurs jours sur des textes longs avant la suite. Pistes : mesurer sur le téléphone le délai réel entre toucher et premier son (AudioRecord, wakelock, journal), garder un court tampon audio dès le toucher ; pour la qualité, comparer niveau micro/AGC (source VOICE_RECOGNITION sans gain) et réglages Silero.
-   Ancienne consigne de test : début de phrase et mots entre deux phrases (correctif v0.1.9), puis la nouvelle bulle (rendu vérifié seulement sous Robolectric, `FloatingControlTest` ; images avec `BUBBLE_SNAPSHOTS=/dossier`).
+## Releases
 
-1. Faire refaire à le mainteneur avec v0.1.8 : plusieurs dictées de suite dans Keep sans toucher l’écran entre deux (note vide puis remplie), une dictée de 5 min, puis Messages et un champ web.
-2. Si un refus subsiste, lire la raison affichée (tableau dans `insertion.md`) et corriger **la règle concernée** ; ne pas réintroduire d’invalidation par événements ni d’exigence de session figée.
-3. Ensuite seulement : endurance 10–15 min (mémoire, chauffe), puis réconciliation de `work/meeting-core`.
+Procedure: [ci.md](ci.md#releases). The tag `android-v0.1.0` was moved once (from `93c3c14` to `d189e5a`) because its release had failed without publishing anything; never move a tag whose release exists.
 
-## Bulle demandée (31/10/2026)
-
-Référence Wispr Flow envoyée par le mainteneur : au repos, petit carré arrondi au bord droit avec une icône d’onde ; pendant la dictée, une pilule [✕ annuler] [onde animée] [✓ terminer]. Glisser la bulle vers une cible ✕ pour la masquer ; elle réapparaît quand on rallume/déverrouille le téléphone. **Implémentée en v0.2.0** (`session/FloatingControl.kt`).
-
-## Releases et procédure
-
-Chaque correctif publié : notes `docs/releases/vX.Y.Z.md` (obligatoires pour le workflow), commit sur `main`, push, attendre **Android Build** vert au SHA exact, puis tag annoté `android-vX.Y.Z` sur ce SHA et push du tag. **Android Release** construit, signe, vérifie (`apksigner`, paquet, version, ABI) et publie `LocalDictate-vX.Y.Z.apk` + `SHA256SUMS`. La version vient du tag (code de version calculé). Le tag `android-v0.1.0` a été déplacé une fois de `93c3c14` à `d189e5a` parce que sa release avait échoué sans rien publier ; ne jamais déplacer un tag dont la release existe.
-
-| Version | Contenu |
+| Version | Content |
 |---|---|
-| 0.1.0 | Première dictée signée (insertion API33 stricte) |
-| 0.1.1 | Raison du refus de cible affichée |
-| 0.1.2 | Type de saisie : classe + variation (Keep) |
-| 0.1.3 | Relecture de confirmation ; bulle libérée après succès |
-| 0.1.4 | Raisons détaillées ; Copier ne masque plus le résultat |
-| 0.1.5 | Confirmation par relecture malgré les événements |
-| 0.1.6 | Copie automatique de secours ; historique des 5 derniers textes |
-| 0.1.7 | Événements des autres applis ignorés |
-| 0.1.8 | Refonte : décision unique à l’arrêt sur lectures fraîches, composition préservée, sélection jamais remplacée, bulle toujours prête. **Insertion confirmée par le mainteneur** (Keep, plusieurs dictées de suite, autre app) |
-| 0.1.9 | Micro ouvert dès le toucher (Silero chargé en parallèle), segments élargis de 0,3 s, coupure forcée à 20 s au lieu de 8 s |
-| 0.2.0 | Bulle façon Wispr Flow (carré au repos, pilule ✕/onde/✓, glisser sur ✕ pour masquer, retour au réveil) ; ✕ annule sans insérer mais garde le texte |
+| 0.1.0 | First signed dictation build (strict API 33 insertion) |
+| 0.1.1 | Target refusal reason shown |
+| 0.1.2 | Input type compared on class + variation (Keep) |
+| 0.1.3 | Confirmation by read-back; bubble freed after success |
+| 0.1.4 | Detailed reasons; Copy no longer hides the result |
+| 0.1.5 | Confirmation by read-back despite events |
+| 0.1.6 | Automatic copy fallback; history of the last 5 texts |
+| 0.1.7 | Events from other apps ignored |
+| 0.1.8 | Redesign: single decision at stop on fresh reads, composition kept, selection never replaced, bubble always ready. **Insertion confirmed on the phone** |
+| 0.1.9 | Microphone opened on tap (Silero loaded in parallel), segments widened by 0.3 s, forced cut at 20 s instead of 8 s |
+| 0.2.0 | New bubble (square at rest, ✕/level/✓ pill, drag onto ✕ to hide, comes back on wake); ✕ cancels without inserting but keeps the text |
 
-## Périmètre déjà validé par le mainteneur
+## Agreed scope
 
-- Français et anglais ; traitement local, sans cloud/API payante/analytics. Modèles préparés explicitement, jamais embarqués dans Git/APK.
-- Dictée jusqu’à 15 min (usage réel visé : 5 à 10 min), sans arrêt sur silence : bulle, démarrage/arrêt utilisateur puis insertion au curseur ; overlay et accessibilité acceptés, Gboard conservé. Plusieurs dictées de suite, dans toutes les applis possibles.
-- **Ne jamais perdre une dictée** : en cas d’échec, copie automatique dans le presse-papiers (accepté le 31/10/2026, même si elle remplace le clip précédent) et historique dans l’app.
-- Mode distinct : réunion jusqu’à 2 h, enregistrement puis transcription et résumé local. Le résumé actuellement développé est **extractif**, à partir de phrases originales horodatées, pas un LLM génératif.
-- le mainteneur télécharge les APK depuis les releases GitHub et teste lui-même sur son Pixel ; il renvoie des captures d’écran.
+- French and English; local processing, no cloud, paid API or analytics. Models prepared explicitly, never bundled in Git or the APK.
+- Dictation up to 15 minutes (typical use: 5 to 10), not ended by silence: bubble, user start/stop, then insertion at the cursor; overlay and accessibility accepted, the user's keyboard kept. Several dictations in a row, in as many apps as possible.
+- **Never lose a dictation**: on failure, automatic copy to the clipboard (accepted even though it replaces the previous clip) and history in the app.
+- Separate mode: meeting up to 2 hours, recording then local transcript and summary. The summary being developed is **extractive** (timestamped original sentences), not a generative LLM.
 
-Voir [le périmètre](mvp.md), [l’architecture](architecture.md), [l’insertion](insertion.md), [la CI](ci.md) et [la recette Pixel](acceptation-pixel.md).
+See the [scope](mvp.md), [architecture](architecture.md), [insertion](insertion.md), [CI](ci.md) and [phone test plan](acceptation-pixel.md).
 
 ## Branches
 
-- **`main`** : dictée complète publiée (voir releases).
-- **`work/dictation`** : fusionnée dans `main` (commit `4cfe9c1`).
-- **`work/meeting-core`** — noyau validé `fd84d93`, puis point d’intégration WIP `d4083376741af126f3492eebaf314addc027b10b` : stockage audio/journal/résumé extractif plus contrôleur, pipeline, dépôt, service et export commencés. Branchement UI/manifest/tests et transitions à terminer/revoir ; ne pas supposer cette branche compilable. Worktree VPS : `<private folder>`. À réconcilier avec `MicrophoneCapture`, les contrôleurs et l’UI de `main`, pas par « ours/theirs ».
+- **`main`**: published dictation (see releases).
+- **`work/dictation`**: merged into `main` (commit `4cfe9c1`).
+- **`work/meeting-core`**: validated core `fd84d93`, then WIP integration point `d4083376741af126f3492eebaf314addc027b10b`: audio storage, journal, extractive summary, controller, pipeline, repository, service and export started. UI/manifest/tests wiring and transitions still to finish and review; do not assume this branch compiles. To be reconciled with `MicrophoneCapture`, the controllers and the UI of `main`, not with "ours/theirs".
 
-## Points de revue toujours ouverts
+## Open review points
 
-1. Insertion : les risques restants listés dans `insertion.md` (composition antérieure non rapportée, champs web, éditeurs recréés, Android 29–32).
-2. FGS microphone armé depuis Activity visible, micro fermé au repos, arrêt/révocation/mute/notification accessibles. Pas de service recréé silencieusement depuis une ancienne commande.
-3. Réunion : un seul verrou d’usage partagé avec préparation/dictée ; audio app-private borné sur disque, capture d’abord puis ASR réel en flux, timestamps issus de l’audio. Ne pas perdre la transcription si résumé/export échoue.
+1. Insertion: the remaining risks listed in `insertion.md` (composition set before input started and never reported, web fields, recreated editors, Android 29–32).
+2. Microphone FGS armed from a visible activity, microphone closed at rest, stop/revocation/mute/notification reachable. No service silently recreated from an old command.
+3. Meeting: one usage lock shared with preparation/dictation; app-private audio bounded on disk, capture first then real streaming ASR, timestamps from the audio. Never lose the transcript if the summary or export fails.
 
-## Validation locale
+## Validation
 
-Avec SDK existant et JDK17 :
+See [ci.md](ci.md#local-build): JVM/Robolectric tests, lint, debug and release builds, Python release-tooling tests. About 5 minutes per full build on a small VPS; avoid parallel builds when RAM is limited.
 
-```sh
-cd ~/dev/sources/localdictate
-export ANDROID_HOME=/path/to/android-sdk
-export TMPDIR=$TMPDIR
-./android/gradlew -p android --no-daemon --max-workers=1 --console=plain \
-  '-Dorg.gradle.jvmargs=-Xmx1024m -Dfile.encoding=UTF-8' \
-  -Pkotlin.compiler.execution.strategy=in-process \
-  testDebugUnitTest lintDebug assembleDebug assembleRelease
-python3 -m unittest discover -s scripts -p 'test_*.py'
-```
+## Not verified on a phone yet
 
-Environ 5 min par build complet. RAM/swap limitées : pas de builds/modèles en parallèle. Le mode cache Robolectric optionnel est documenté dans `docs/ci.md`.
-
-La clé dédiée existe **hors Git/vault** sous `<private key folder>`, permissions 0700/0600 ; secrets `SIGNING_*` configurés sur ce dépôt. Ne pas recréer/réutiliser une autre clé et ne jamais afficher les valeurs. `<private folder> --version X.Y.Z` construit et inspecte un APK signé local (98 tests, inspection statique réussie le 30/10/2026) ; les livraisons à le mainteneur passent par les releases GitHub.
-
-## Toujours non vérifié sur téléphone
-
-Insertion multi-apps (seul Keep essayé), fiabilité de l’insertion v0.1.8, qualité anglaise, dictées de 5–15 min, maintien du FGS/micro, mode avion puis retour de connectivité, mémoire, latence, batterie et chauffe, Android 29–32. Aucun test hôte ne doit être présenté comme cette recette Pixel.
+Insertion in apps other than Keep and one messaging app, web fields, English quality, 15-minute dictations, keeping the FGS/microphone across app switches and screen lock, airplane mode then return of connectivity, memory, latency, battery and heat, Android 29–32. Host tests are never presented as phone results.

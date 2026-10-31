@@ -1,31 +1,40 @@
 # LocalDictate
 
-Dictée Android personnelle **locale**, français/anglais, sans abonnement, API payante, analytics ni enregistrement automatique.
+**On-device** dictation for Android, French and English: speak, and the text is typed at the cursor of whatever app you are in. No account, no subscription, no cloud speech service, no analytics. Audio and text never leave the phone.
 
-La dictée est raccordée à un vrai moteur Parakeet TDT 0.6B v3 via sherpa-onnx, avec préparation explicite vérifiée, bulle déplaçable, capture foreground, segmentation Silero, limite 15 min et récupération locale du texte. **Aucun essai sur téléphone n’est encore déclaré réussi.** Le mode réunion (2 h, transcription et résumé écrit locaux) est distinct et clairement indisponible.
+Speech recognition runs locally with NVIDIA Parakeet TDT 0.6B v3 through sherpa-onnx, with Silero VAD for segmentation. A floating bubble starts and stops dictation (up to 15 minutes, pauses never end a session) and the text is inserted at the cursor through Android's accessibility editing API, keeping your usual keyboard (e.g. Gboard).
 
-## Utilisation
+Status: early but working. Dictation has been tested by the maintainer on a Pixel in Google Keep and a messaging app, including long texts; other apps, long sessions and battery use are not verified yet. A separate meeting mode (2-hour recording, local transcript and summary) is planned but **not available** in the app yet. See [status](docs/status.md).
 
-1. Préparer les modèles volontairement (environ 488 Mo de réseau ; 1,5 Go libres), puis autoriser microphone, notifications, bulle et accessibilité depuis l’écran de configuration.
-2. Armer la bulle depuis cet écran visible : le service charge les modèles, le micro reste fermé.
-3. Placer le curseur dans un champ d’une autre app, toucher **Dicter**, parler avec les pauses voulues, puis **Arrêter**. Le micro est libéré avant le traitement des derniers segments. Croix/notification : arrêter et désarmer.
-4. Sur **Android 13 / API 33+**, l’insertion automatique utilise directement la connexion d’édition d’accessibilité : elle ne lit, n’écrit et n’efface jamais le presse-papiers et conserve Gboard comme clavier. La cible, la sélection, la session d’éditeur et le contexte complet doivent être inchangés et sans composition en cours. Sinon, ainsi que sur Android 10–12, ouvrir LocalDictate, **Copier**, puis coller soi-même. Cette seule action explicite remplace le clip précédent et le marque sensible (indication de masquage, pas protection d’accès). Toujours vérifier le champ avant de recopier après une insertion non confirmée.
-5. Le texte reconnu reste dans le stockage privé jusqu’à **Effacer**. Après un arrêt brutal, le texte synchronisé est récupéré, mais le son encore en attente est perdu. Aucun collage ni réarmement automatique après reprise.
+## Using it
 
-Aucun poids modèle dans le dépôt ou l’APK. Internet sert seulement à la préparation ; elle est bloquée tant que le service est armé ou termine son travail. L’accessibilité consulte uniquement la cible demandée et la revalide, sans historique d’écran ni lecture permanente. Pas de champ password, pas de remplacement complet du texte d’un champ.
+1. Install the signed APK from the [releases](https://github.com/juliendevelopment/localdictate/releases) (arm64 phones). Android may block a sideloaded app that asks for accessibility; see [installation notes](docs/insertion.md#installing-on-a-pixel).
+2. In the app, tap **Prepare** to download the models once (about 488 MB; 1.5 GB free space needed). This is the only network use.
+3. Grant microphone, notifications, "display over other apps" and the LocalDictate accessibility service.
+4. Tap **Arm the bubble**. A small square appears at the screen edge; the microphone stays closed.
+5. In any app, put the cursor in a text field and tap the bubble. When the level bars move, speak. Tap **✓** to insert the text at the cursor, or **✕** to cancel (the text is still kept in the app).
+6. Drag the bubble onto the ✕ at the bottom of the screen to hide it; it comes back when the phone is woken or unlocked.
 
-## Développement et preuves
+Nothing is ever overwritten: insertion only happens at a collapsed cursor in the same field, never into password fields. If the text cannot be inserted, it is copied to the clipboard (replacing the previous clip) and the last five dictations are always available in the app. On Android 10–12 the text is copied instead of inserted.
 
-Kotlin/Compose dans `android/`, JDK 17, SDK 35, min 29, ABI arm64-v8a. Wrapper et dépendances épinglés ; le build peut télécharger seulement l’AAR natif épinglé, jamais les poids. Aucune licence ajoutée au code propre du projet.
+## Privacy
+
+No model weights in the repository or APK. Network is used only by the explicit model preparation, with pinned sizes and SHA-256. Accessibility is used only to find the focused field when you start a dictation and to insert the text when you finish; screens are not read or logged. Recognized text stays in app-private storage; audio is never saved.
+
+## Building
+
+Kotlin/Compose in `android/`, JDK 17, compile/target SDK 35, min SDK 29, ABI arm64-v8a. The Gradle wrapper and dependencies are pinned; the build downloads only the pinned native sherpa-onnx AAR, never model weights.
 
 ```sh
 cd android
-ANDROID_HOME=/chemin/du/sdk ./gradlew --no-daemon --max-workers=1 --console=plain \
+ANDROID_HOME=/path/to/sdk ./gradlew --no-daemon --max-workers=1 --console=plain \
   '-Dorg.gradle.jvmargs=-Xmx1024m -Dfile.encoding=UTF-8' \
   -Pkotlin.compiler.execution.strategy=in-process \
   testDebugUnitTest lintDebug assembleDebug assembleRelease
 ```
 
-[État exact et résultats](docs/status.md) · [Architecture et insertion directe](docs/architecture.md) · [Recette Pixel](docs/acceptation-pixel.md) · [Périmètre](docs/mvp.md) · [Licences et attribution NVIDIA](docs/licences.md) · [Build/CI](docs/ci.md).
+## Documentation
 
-[GitHub Actions](https://github.com/juliendevelopment/localdictate/actions/workflows/android-build.yml) conserve ses déclencheurs et permissions. Le debug est un artefact de développement ; release locale minifiée non signée. l’agent possède revue, Git, signature et livraison ; aucun commit/publication dans ce lot.
+[Status and releases](docs/status.md) · [Architecture](docs/architecture.md) · [Text insertion: design and field tests](docs/insertion.md) · [Scope](docs/mvp.md) · [Manual phone test plan](docs/acceptation-pixel.md) · [Models and licenses](docs/licences.md) · [Build and CI](docs/ci.md) · [References](docs/references.md)
+
+The app's interface is in French.

@@ -1,51 +1,51 @@
-# Périmètre
+# Scope
 
-## Demande validée
+## Agreed requirements
 
-- Français et anglais ; pas de traduction demandée.
-- Autorisation utilisateur pour affichage au-dessus des applications et accessibilité.
-- Dictée jusqu’à **15 minutes maximum**, sans coupure à chaque pause ; arrêt explicite puis insertion à l’emplacement du curseur, en conservant le clavier existant.
-- Mode distinct pour enregistrer une **réunion jusqu’à 2 heures**, puis transcrire et synthétiser les textes.
-- Modèle local, pas d’abonnement ni d’API payante ; préparation initiale des modèles autorisée, contenu toujours local.
+- French and English; no translation.
+- The user grants "display over other apps" and accessibility.
+- Dictation of up to **15 minutes**, not ended by pauses; explicit stop, then insertion at the cursor, keeping the current keyboard.
+- A separate mode to record a **meeting of up to 2 hours**, then transcribe and summarize it.
+- Local models, no subscription or paid API; an initial model download is allowed, all content stays on the phone.
 
-« Synthétiser » est interprété ici comme produire un **résumé écrit du contenu**, pas une synthèse vocale. Le format du résumé, le choix manuel/automatique de langue et le niveau de détail restent à préciser sans bloquer le socle ni la dictée.
+"Summarize" means a **written summary of the content**, not speech synthesis. Summary format, manual/automatic language choice and level of detail are still to be decided; they do not block dictation.
 
-## Ordre de livraison
+## Delivery order
 
-1. **Socle** : dépôt privé, projet Android, présentation distincte des modes, limites et tests, CI sur `main`.
-2. **Dictée fonctionnelle** : préparer un modèle FR/EN vérifié, capturer en foreground, segmenter sans perdre de mots, arrêter proprement ; bulle et insertion sûre avec repli explicite.
-3. **Durcissement dictée** : interruptions, refus/révocation de permissions, changement de cible, récupération de texte, 15 min sur Pixel, mémoire/latence/thermique/confidentialité.
-4. **Réunion** : capture durable et bornée en mémoire, reprise/arrêt, transcription progressive conservée, export local explicite ; validation d’une session de 2 h.
-5. **Résumé local de réunion** : moteur séparé, découpage hiérarchique sans tronquer les 2 h, traçabilité vers la transcription, qualité FR/EN et performances Pixel. Ne pas confondre moteur ASR et modèle de résumé.
+1. **Foundation**: repository, Android project, distinct presentation of both modes, limits and tests, CI on `main`.
+2. **Working dictation**: prepare a verified FR/EN model, capture in a foreground service, segment without losing words, stop cleanly; bubble and safe insertion with an explicit fallback.
+3. **Dictation hardening**: interruptions, denied/revoked permissions, target changes, text recovery, 15 minutes on a phone, memory/latency/heat/privacy.
+4. **Meeting**: durable capture bounded in memory, pause/stop, progressive transcript kept on disk, explicit local export; validation of a 2-hour session.
+5. **Local meeting summary**: a separate engine, hierarchical chunking without truncating 2 hours, traceability to the transcript, FR/EN quality and phone performance. The ASR engine and the summary model are different things.
 
-Les deux modes font partie de la cible ; la priorité d’implémentation est la dictée. Le résumé de réunion n’est pas retiré du périmètre ni déclaré déjà disponible.
+Both modes are in scope; dictation comes first. The meeting summary is neither dropped nor presented as available.
 
-## Implémentation de cette lane
+## Current implementation
 
-La chaîne dictée réelle est raccordée : préparation Parakeet/Silero, service microphone armé depuis l’activité visible, bulle, capture/segmentation/reconnaissance, transcription privée et insertion sous conditions. La réunion reste indisponible. Les cases ci-dessous restent des critères **téléphone** : elles ne sont pas cochées par des fixtures JVM.
+The real dictation chain is wired: Parakeet/Silero preparation, microphone service armed from the visible activity, bubble, capture/segmentation/recognition, private transcript and conditional insertion. The meeting mode is not available yet. The boxes below are **phone** criteria: JVM fixtures do not tick them.
 
-L’insertion automatique passe par la connexion d’édition d’accessibilité sur API 33+, sans remplacement de Gboard. À l’arrêt, elle requiert le même champ au focus, un contexte complet observable, un curseur sans sélection, et préserve un mot en composition ; rien n’est remplacé. Sinon (ou sur API 29–32), le texte est copié automatiquement dans le presse-papiers et reste dans l’historique des 5 derniers textes ; la bulle reste prête. Détails et essais Pixel : [insertion.md](insertion.md). Voir [l’architecture](architecture.md) et [la checklist Pixel](acceptation-pixel.md). Le son en RAM reste perdu après mort du processus.
+Automatic insertion uses the accessibility editing connection on API 33+, without replacing the keyboard. At stop time it requires the same focused field, a fully observable context and a collapsed cursor, and it keeps any word being composed by the keyboard; nothing is replaced. Otherwise (and on API 29–32) the text is copied to the clipboard and stays in the history of the last 5 dictations; the bubble stays ready. Details and field tests: [insertion.md](insertion.md). See also the [architecture](architecture.md) and the [phone test plan](acceptation-pixel.md). Audio still in RAM is lost if the process dies.
 
-## Acceptation dictée
+## Dictation acceptance
 
-- [ ] Une bulle non focusable conserve la cible de saisie pendant le contrôle de l’enregistrement.
-- [ ] Permission microphone et service foreground microphone, notification/arrêt visibles ; rien ne démarre à l’ouverture de l’app.
-- [ ] FR/EN reconnus par un vrai modèle, sans appel réseau pendant l’usage.
-- [ ] Une pause n’arrête pas la session ; une limite atteinte arrête la capture puis finalise le texte accepté sans troncature silencieuse.
-- [ ] Insertion au curseur ; une sélection n’est jamais remplacée ; le reste du champ est conservé.
-- [ ] Mot de passe/champ incompatible, cible changée ou application fermée : aucun écrasement, texte récupérable, repli explicite.
-- [ ] Une session de 15 min reste bornée en RAM et ne perd pas les segments acceptés.
-- [ ] Validations réelles sur le Pixel, au minimum dans quelques applications natives et un champ web ; pas de promesse « toutes les apps ».
+- [x] A non-focusable bubble keeps the input target while recording is controlled (Pixel, v0.2.0).
+- [ ] Microphone permission and microphone foreground service, visible notification/stop; nothing starts when the app is opened.
+- [x] FR recognized by a real model on the phone (Pixel). EN and the absence of network calls during use are not verified on the phone yet.
+- [ ] A pause does not end the session; reaching the limit stops capture, then finalizes the accepted text without silent truncation.
+- [ ] Insertion at the cursor; a selection is never replaced; the rest of the field is kept.
+- [ ] Password/incompatible field, changed target or closed app: nothing overwritten, text recoverable, explicit fallback.
+- [ ] A 15-minute session stays bounded in RAM and loses no accepted segment.
+- [ ] Real checks on the phone in several native apps and a web field; no "works in every app" promise.
 
-## Acceptation réunion
+## Meeting acceptance
 
-- [ ] Démarrage volontaire et signal visible ; l’utilisateur gère l’accord des participants.
-- [ ] Capture 2 h, fichiers privés et écritures progressives, arrêt sûr si stockage insuffisant/interruption.
-- [ ] Transcription conservée même si le résumé échoue ; export/suppression explicites.
-- [ ] Aucun collage dans une autre application et aucune identification de locuteurs promise sans implémentation/test.
-- [ ] Résumé local distinguant faits, décisions et actions lorsqu’ils existent, sans les inventer ; accès à la transcription complète.
-- [ ] Essai réel d’endurance, stockage, RAM, chaleur et délai de traitement sur le téléphone.
+- [ ] Deliberate start and visible indicator; the user handles participants' consent.
+- [ ] 2-hour capture, private files written progressively, safe stop on low storage/interruption.
+- [ ] Transcript kept even if the summary fails; explicit export/deletion.
+- [ ] No pasting into another app, and no speaker identification promised without implementation and tests.
+- [ ] Local summary separating facts, decisions and actions when they exist, without inventing them; full transcript accessible.
+- [ ] Real endurance, storage, RAM, heat and processing-time test on the phone.
 
-## Limites de confidentialité
+## Privacy limits
 
-Absence d’analytics et inspection des dépendances/manifest sont des preuves statiques. Le mode avion seul ne prouve pas l’absence de collecte différée : les tests réseau doivent également observer le retour de connectivité. Ne jamais présenter des tests hôte comme des mesures Pixel.
+The absence of analytics and the inspection of dependencies/manifest are static evidence. Airplane mode alone does not prove the absence of deferred collection: network tests must also watch the return of connectivity. Host tests are never phone measurements.

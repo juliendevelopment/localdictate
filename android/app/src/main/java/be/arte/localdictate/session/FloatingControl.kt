@@ -19,7 +19,7 @@ import kotlin.math.abs
 import kotlin.math.hypot
 
 /**
- * Non-focusable overlay, modelled on the bubble le mainteneur uses elsewhere: a small square docked at the screen edge
+ * Non-focusable overlay, modelled on common dictation bubbles: a small square docked at the screen edge
  * at rest, a [✕ | live level | ✓] pill while dictating. Dragging it onto the ✕ target at the bottom hides it
  * (the service stays armed with the microphone closed); [show] brings it back. Drag never starts a capture.
  */

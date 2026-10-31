@@ -1,26 +1,28 @@
-# Modèles, runtime et licences
+# Models, runtime and licenses
 
-Aucune licence n’est ajoutée au code propre de LocalDictate. Les composants tiers gardent leurs licences. Les notices sont embarquées dans `assets/THIRD_PARTY_NOTICES.txt` et consultables hors ligne dans « Modèles, licences et limites » → « Lire les notices complètes ».
+Third-party components keep their own licenses. Their notices are bundled in `assets/THIRD_PARTY_NOTICES.txt` and readable offline in the app under « Modèles, licences et limites » → « Lire les notices complètes ».
 
-| Composant | Attribution / licence | Origine primaire |
+| Component | Attribution / license | Primary source |
 | --- | --- | --- |
-| Parakeet TDT 0.6B v3 | NVIDIA, **CC BY 4.0** ; conversion ONNX et quantification int8 par k2-fsa/sherpa-onnx, changement de format du modèle d’origine ; aucune caution de NVIDIA | [Fiche NVIDIA](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3), [licence CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), [artefacts sherpa](https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models) |
-| sherpa-onnx 2.0.1 | k2-fsa et contributeurs, Apache 2.0 | [Licence au commit figé](https://github.com/k2-fsa/sherpa-onnx/blob/af2d8d81dbfa61c4cea4c568da78f3982edca005/LICENSE) |
-| Silero VAD | Silero Team, MIT | [Licence](https://github.com/snakers4/silero-vad/blob/066409f3d9db45a30d21dfcbf9147826ffdd7052/LICENSE) |
-| ONNX Runtime natif lié dans sherpa | Microsoft, MIT ; aucun binding Java de traduction ajouté | [Licence](https://github.com/microsoft/onnxruntime/blob/main/LICENSE) |
-| Commons Compress 1.28.0 | Apache Software Foundation, Apache 2.0 | [Licence et notice](https://github.com/apache/commons-compress/tree/rel/commons-compress-1.28.0) |
-| Kotlin/coroutines, AndroidX/Compose | JetBrains, Google et contributeurs, Apache 2.0 | [Kotlin](https://github.com/JetBrains/kotlin/blob/master/license/LICENSE.txt), [AndroidX](https://android.googlesource.com/platform/frameworks/support/+/androidx-main/LICENSE.txt) |
+| Parakeet TDT 0.6B v3 | NVIDIA, **CC BY 4.0**; ONNX conversion and int8 quantization by k2-fsa/sherpa-onnx, a format change of the original model; no endorsement by NVIDIA | [NVIDIA model card](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), [sherpa artifacts](https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models) |
+| sherpa-onnx 2.0.1 | k2-fsa and contributors, Apache 2.0 | [License at the pinned commit](https://github.com/k2-fsa/sherpa-onnx/blob/af2d8d81dbfa61c4cea4c568da78f3982edca005/LICENSE) |
+| Silero VAD | Silero Team, MIT | [License](https://github.com/snakers4/silero-vad/blob/066409f3d9db45a30d21dfcbf9147826ffdd7052/LICENSE) |
+| Native ONNX Runtime linked in sherpa | Microsoft, MIT | [License](https://github.com/microsoft/onnxruntime/blob/main/LICENSE) |
+| Commons Compress 1.28.0 | Apache Software Foundation, Apache 2.0 | [License and notice](https://github.com/apache/commons-compress/tree/rel/commons-compress-1.28.0) |
+| Kotlin/coroutines, AndroidX/Compose | JetBrains, Google and contributors, Apache 2.0 | [Kotlin](https://github.com/JetBrains/kotlin/blob/master/license/LICENSE.txt), [AndroidX](https://android.googlesource.com/platform/frameworks/support/+/androidx-main/LICENSE.txt) |
 
-La fiche NVIDIA décrit explicitement français et anglais, identification automatique de langue, ponctuation et capitalisation. Elle ne fournit pas une mesure Pixel de cette intégration. Qualité, mémoire et délai restent à tester sur le téléphone.
+The NVIDIA model card explicitly covers French and English, automatic language identification, punctuation and capitalization. It is not a measurement of this integration on a phone.
 
-## Artefacts fixés
+Model weights are not in the repository or the APK: each user downloads them from the sources above when tapping **Prepare**.
 
-| Artefact | Taille (octets) | SHA-256 |
+## Pinned artifacts
+
+| Artifact | Size (bytes) | SHA-256 |
 | --- | ---: | --- |
 | sherpa-onnx-static-link-onnxruntime-2.0.1.aar | 38 577 050 | `07e042d97f3a6bd5b7fe74d4eef0513dc01a714b16c15a903250095aba43a575` |
 | sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2 | 487 170 055 | `5793d0fd397c5778d2cf2126994d58e9d56b1be7c04d13c7a15bb1b4eafb16bf` |
 | silero_vad.onnx | 643 854 | `9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6` |
 
-Les hashes/tailles de chaque fichier extrait sont dans `ModelCatalog.kt`, conservés de la vérification de l’archive réelle dans un projet voisin. Cette implémentation n’a pas téléchargé à nouveau le demi-gigaoctet de poids. Le build a recontrôlé les octets du vrai AAR, et `javap` ses classes/API. Aucun modèle téléchargé dans les fixtures JVM ; elles fabriquent des données minuscules et des archives réelles, y compris corrompues/malveillantes, pour exercer les mêmes vérifications.
+Hashes and sizes of every extracted file are in `ModelCatalog.kt`, taken from a verification of the real archive. The build re-checks the bytes of the real AAR. JVM fixtures download no model: they build tiny data and real archives, including corrupted and malicious ones, to exercise the same checks.
 
-Liens de restrictions Android : [FGS et microphone](https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start), [presse-papiers et focus](https://developer.android.com/about/versions/10/privacy/changes#clipboard-data). La restriction de lecture du presse-papiers concerne la copie explicite ; l’insertion automatique utilise la connexion d’édition publique API33+ sans clip. L’accès overlay n’est pas utilisé comme un contournement du lancement FGS microphone.
+Relevant Android restrictions: [foreground services and microphone](https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start), [clipboard and focus](https://developer.android.com/about/versions/10/privacy/changes#clipboard-data). Clipboard reads are never needed: automatic insertion uses the public API 33+ editing connection, and the fallback only writes a clip. Overlay access is not used to work around the microphone foreground-service start rules.
