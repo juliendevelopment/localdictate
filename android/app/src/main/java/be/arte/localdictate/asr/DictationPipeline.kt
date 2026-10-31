@@ -4,6 +4,9 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import java.util.concurrent.atomic.AtomicReference
 
+/** Longest segment sent to the recognizer: VAD maximum (20 s) plus margins, with headroom. */
+const val MAX_SEGMENT_SAMPLES = 25 * 16_000
+
 /** Segmentation is replaceable in JVM fixtures; production uses only Silero. */
 interface SpeechSegmenter {
     fun accept(samples: FloatArray): List<FloatArray>
@@ -62,7 +65,7 @@ class DictationPipeline(
         val segmentationJob = launch(Dispatchers.Default) {
             suspend fun send(items: List<FloatArray>) {
                 for (item in items) {
-                    check(item.size <= 12 * 16_000) { "Segment VAD trop long" }
+                    check(item.size <= MAX_SEGMENT_SAMPLES) { "Segment VAD trop long" }
                     if (!segments.trySend(item).isSuccess) {
                         fail("Transcription en retard : micro arrêté, vidage des segments acceptés.")
                         segments.send(item)

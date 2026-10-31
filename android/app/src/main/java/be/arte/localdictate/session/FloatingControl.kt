@@ -69,7 +69,7 @@ class FloatingControl(context: Context, onTap: () -> Unit, onClose: () -> Unit) 
         toggle.text = when (phase) {
             Phase.LOADING -> "Chargement…"
             Phase.ARMED -> if (state.transcript.isNotEmpty() || state.error != null) "Ouvrir le texte" else "● Dicter"
-            Phase.RECORDING -> "■ Arrêter"
+            Phase.RECORDING -> if (state.micLive) "■ Arrêter" else "◌ Micro…"
             Phase.PROCESSING -> "Traitement…"
             Phase.OFF -> "Désarmée"
         }

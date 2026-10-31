@@ -1,6 +1,7 @@
 package be.arte.localdictate.asr
 
 import be.arte.localdictate.audio.PcmFramer
+import be.arte.localdictate.audio.SegmentPadder
 import be.arte.localdictate.models.ModelFiles
 import com.k2fsa.sherpa.onnx.*
 import java.io.File
@@ -37,11 +38,14 @@ class SileroSegmenter(file: File) : SpeechSegmenter, AutoCloseable {
     private val vad = Vad(assetManager = null, config = VadModelConfig(
         sileroVadModelConfig = SileroVadModelConfig(model = file.absolutePath,
             threshold = 0.5f, minSilenceDuration = 0.4f, minSpeechDuration = 0.25f,
-            windowSize = 512, maxSpeechDuration = 8f),
+            // Long enough that continuous speech is rarely cut inside a word; Parakeet decodes 20 s easily.
+            windowSize = 512, maxSpeechDuration = 20f),
         sampleRate = 16_000, numThreads = 1, provider = "cpu", debug = false))
     private val framer = PcmFramer()
+    private val padder = SegmentPadder()
     override fun accept(samples: FloatArray): List<FloatArray> {
         val result = mutableListOf<FloatArray>()
+        padder.write(samples)
         framer.accept(samples) { vad.acceptWaveform(it); drain(result) }
         return result
     }
@@ -58,8 +62,9 @@ class SileroSegmenter(file: File) : SpeechSegmenter, AutoCloseable {
             vad.pop()
             val count = (minOf(speech.start + speech.samples.size, framer.sampleCount) - speech.start)
                 .coerceAtLeast(0).toInt()
-            check(count <= 12 * 16_000) { "Segment VAD trop long" }
-            if (count > 0) result += if (count == speech.samples.size) speech.samples else speech.samples.copyOf(count)
+            check(count <= MAX_SEGMENT_SAMPLES) { "Segment VAD trop long" }
+            // Real captured audio around the segment (never the zero padding of the last frame).
+            if (count > 0) padder.widen(speech.start, count).takeIf { it.isNotEmpty() }?.let { result += it }
         }
     }
     override fun close() = vad.release()

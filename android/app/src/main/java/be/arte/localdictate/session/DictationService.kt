@@ -104,7 +104,7 @@ class DictationService : Service() {
         val startRefusal = if (hasTarget) "" else targetService?.lastRefusal.orEmpty()
         val recorder = MicrophoneCapture(applicationContext)
         microphone = recorder
-        controller.update { it.copy(phase = Phase.RECORDING, durationMs = 0, error = null, notice = null,
+        controller.update { it.copy(phase = Phase.RECORDING, micLive = false, durationMs = 0, error = null, notice = null,
             message = if (hasTarget) "Dictée locale. Les pauses ne terminent pas la session."
                 else "Aucun champ compatible : la dictée sera copiée dans le presse-papiers à l’arrêt.") }
         sessionJob = scope.launch {
@@ -121,14 +121,24 @@ class DictationService : Service() {
                 id = withContext(Dispatchers.IO) { controller.journal.begin().id }
                 val sessionId = id
                 val decoder = checkNotNull(engine)
-                withContext(Dispatchers.Default) { detector = decoder.segmenter() }
-                val failure = DictationPipeline(checkNotNull(detector),
+                // The microphone opens now; Silero loads on the segmentation thread while PCM waits in the queue,
+                // so the first words spoken right after the tap are kept.
+                val segmenter = object : SpeechSegmenter {
+                    private fun vad() = detector ?: decoder.segmenter().also { detector = it }
+                    override fun accept(samples: FloatArray) = vad().accept(samples)
+                    override fun finish() = vad().finish()
+                }
+                var live = false
+                val failure = DictationPipeline(segmenter,
                     capture = { emit -> recorder.read(onSilenced = { silenced ->
                         if (silenced) {
                             controller.update { it.copy(phase = Phase.PROCESSING, error = "Microphone rendu muet par Android : dictée à vérifier, copie manuelle requise.") }
                             recorder.stop()
                         }
-                    }, emit = { emit(it.samples) }) },
+                    }, emit = {
+                        if (!live) { live = true; controller.update { state -> state.copy(micLive = true) } }
+                        emit(it.samples)
+                    }) },
                     stopCapture = recorder::stop,
                     recognize = { decoder.recognize(it) },
                     onText = { text ->

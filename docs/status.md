@@ -19,9 +19,15 @@ Vérifié sur le téléphone par le mainteneur :
 
 ## Prochaine action
 
+0. le mainteneur essaie v0.1.9 (début de phrase, mots entre deux phrases). En cours : bulle façon Wispr Flow (voir plus bas, « Bulle demandée »).
+
 1. Faire refaire à le mainteneur avec v0.1.8 : plusieurs dictées de suite dans Keep sans toucher l’écran entre deux (note vide puis remplie), une dictée de 5 min, puis Messages et un champ web.
 2. Si un refus subsiste, lire la raison affichée (tableau dans `insertion.md`) et corriger **la règle concernée** ; ne pas réintroduire d’invalidation par événements ni d’exigence de session figée.
 3. Ensuite seulement : endurance 10–15 min (mémoire, chauffe), puis réconciliation de `work/meeting-core`.
+
+## Bulle demandée (31/10/2026)
+
+Référence Wispr Flow envoyée par le mainteneur : au repos, petit carré arrondi au bord droit avec une icône d’onde ; pendant la dictée, une pilule [✕ annuler] [onde animée] [✓ terminer]. Glisser la bulle vers une cible ✕ pour la masquer ; elle réapparaît quand on rallume/déverrouille le téléphone.
 
 ## Releases et procédure
 
@@ -37,7 +43,8 @@ Chaque correctif publié : notes `docs/releases/vX.Y.Z.md` (obligatoires pour le
 | 0.1.5 | Confirmation par relecture malgré les événements |
 | 0.1.6 | Copie automatique de secours ; historique des 5 derniers textes |
 | 0.1.7 | Événements des autres applis ignorés |
-| 0.1.8 | Refonte : décision unique à l’arrêt sur lectures fraîches, composition préservée, sélection jamais remplacée, bulle toujours prête |
+| 0.1.8 | Refonte : décision unique à l’arrêt sur lectures fraîches, composition préservée, sélection jamais remplacée, bulle toujours prête. **Insertion confirmée par le mainteneur** (Keep, plusieurs dictées de suite, autre app) |
+| 0.1.9 | Micro ouvert dès le toucher (Silero chargé en parallèle), segments élargis de 0,3 s, coupure forcée à 20 s au lieu de 8 s |
 
 ## Périmètre déjà validé par le mainteneur
 

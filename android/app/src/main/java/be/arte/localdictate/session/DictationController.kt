@@ -36,6 +36,8 @@ data class DictationState(
     val history: List<String> = emptyList(),
     /** Short outcome shown under the bubble after a dictation that was not inserted. */
     val notice: String? = null,
+    /** True once the microphone delivered its first audio in the current dictation. */
+    val micLive: Boolean = false,
 )
 
 class DictationController(private val app: Application) {
