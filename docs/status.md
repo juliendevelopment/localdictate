@@ -46,6 +46,7 @@ Procedure: [ci.md](ci.md#releases). Never move a tag whose release exists. Versi
 | 0.2.2 | Screen kept on while dictating and processing (bubble window flag) |
 | 0.2.3 | Weekly statistics: words, dictated time and dictations per week, app-private counts only |
 | 0.2.4 | Insertion into empty fields showing a placeholder (Discord, messaging apps) |
+| 0.2.5 | Editor-only insertion target for focused fields not exposed as editable (web fields, custom views) |
 
 ## Agreed scope
 
