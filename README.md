@@ -4,7 +4,7 @@
 
 Speech recognition runs locally with NVIDIA Parakeet TDT 0.6B v3 through sherpa-onnx, with Silero VAD for segmentation. A floating bubble starts and stops dictation (up to 15 minutes, pauses never end a session) and the text is inserted at the cursor through Android's accessibility editing API, keeping your usual keyboard (e.g. Gboard).
 
-Status: early but working. Dictation has been tested by the maintainer on a Pixel in Google Keep and a messaging app, including long texts; other apps, long sessions and battery use are not verified yet. A separate meeting mode (2-hour recording, local transcript and summary) is planned but **not available** in the app yet. See [status](docs/status.md).
+Status: early but working. Dictation has been tested by the maintainer on a Pixel in Google Keep and a messaging app, including long texts; other apps, long sessions and battery use are not verified yet. A separate meeting mode (up to 2 hours recorded, then local transcript and extractive summary) is in `main` but **not tested on a phone yet** and not in a release. See [status](docs/status.md).
 
 ## Using it
 

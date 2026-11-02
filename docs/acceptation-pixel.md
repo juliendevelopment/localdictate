@@ -2,7 +2,7 @@
 
 Install a signed release APK. Record Android version, device, APK SHA, duration, target app and result. Never write private content into test logs. Results already obtained are logged in [insertion.md](insertion.md) and [status.md](status.md); unticked boxes are not verified.
 
-- [ ] Fresh start: no microphone indicator, service, download or permission prompt starts by itself. Meeting mode clearly unavailable.
+- [ ] Fresh start: no microphone indicator, service, download or permission prompt starts by itself. No meeting recording starts by itself.
 - [x] Explicit preparation completed on the phone (v0.1.0). Still to test: progress display, cancel mid-transfer, resume after a network cut, insufficient space/error, restart offline after a complete install.
 - [ ] Deny/grant microphone, notifications, overlay and accessibility; coming back from settings never arms automatically. Revoke during arming/capture/processing.
 - [x] Arm from the visible screen; in another app, tapping/dragging the bubble does not steal focus (v0.2.0). Still to test: notification shown immediately, microphone closed while loading and waiting; on API 30+, capture marked privacy-sensitive and capture conflicts/silencing reported.
@@ -19,5 +19,14 @@ Install a signed release APK. Record Android version, device, APK SHA, duration,
 - [ ] Rotation/activity recreation during recording/processing: no second session, no double insertion. Kill the process/service and reopen: already recognized text recovered as partial, no automatic microphone/bubble restart or paste.
 - [ ] After preparation: airplane mode, then firewall/network observation during arming, capture, processing, recovery and return of connectivity. No upload, analytics or deferred telemetry. Airplane mode alone does not prove the last point.
 - [ ] New bubble (v0.2.0): drag onto ✕ hides it, waking/unlocking shows it again, « Afficher la bulle » from the notification; ✕ during dictation inserts nothing and keeps the text in history.
+
+## Meeting ([meeting.md](meeting.md))
+
+- [ ] Short meeting (2–5 min, French): « Démarrer une réunion (FR) », notification shown, duration counting; stop from the app, then from the notification. Phases go `RECORDING` → `TRANSCRIBING` → `SUMMARIZING` → `COMPLETE`; transcript and summary match what was said, no invented text.
+- [ ] While a meeting records or processes, dictation cannot be armed, and the reverse.
+- [ ] Screen off and locked during recording, then during processing: no gap in the audio (compare the WAV export), processing goes on.
+- [ ] Interruptions: phone call, another app taking the microphone, revoke microphone, kill the app: session left `RECORDED`/`CANCELLED`/`ERROR` with a message, audio kept, « Transcrire et résumer » resumes explicitly.
+- [ ] 30–60 min, then 2 h: stop exactly at 7200 s, transcription time, peak RAM, heat, battery, free space before/after.
+- [ ] Markdown and WAV export through the share sheet; deletion removes the meeting; nothing pasted into another app.
 
 Host fixtures never count as passing any of these checks.

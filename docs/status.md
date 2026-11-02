@@ -1,8 +1,8 @@
 # LocalDictate status
 
-## Situation on 31 October 2026
+## Situation on 3 November 2026
 
-**Dictation** ships as signed APKs on GitHub releases. Versions 0.1.0 to 0.2.0 were published while the repository was private (kept in a private archive with the original history); the public repository starts with **v0.2.1**, same app as 0.2.0 plus the Apache 2.0 license and English documentation. The app is installed and tested by the maintainer on a Pixel with Google Keep, a messaging app and Gboard. The **meeting** mode is not in these APKs (`work/meeting-core` is not merged).
+**Dictation** ships as signed APKs on GitHub releases. Versions 0.1.0 to 0.2.0 were published while the repository was private (kept in a private archive with the original history); the public repository starts with **v0.2.1**, same app as 0.2.0 plus the Apache 2.0 license and English documentation. The app is installed and tested by the maintainer on a Pixel with Google Keep, a messaging app and Gboard. The **meeting** mode (sequential 2-hour recording, then local transcript and extractive summary, see [meeting.md](meeting.md)) is merged into `main` but not in any release yet and **not tested on a phone**.
 
 Verified on the phone:
 
@@ -21,9 +21,10 @@ Insertion used to fail because of a design error (requiring a "frozen world" dur
 2. **Transcription errors**: some remain, fewer when speaking close to the microphone. Next: compare microphone level/AGC (the VOICE_RECOGNITION source has no gain) and Silero settings, with real sentences and their expected text.
 3. **Insertion in chat apps** (Discord, messaging apps): refused in 0.2.3 while Keep works. 0.2.4 (hint read as empty) did not fix the reported app: its focused field is not exposed as editable (`modifiable=false`, no selection). 0.2.5 adds an editor-only target (see `insertion.md`), host-tested only. Next: on the Pixel, the same chat app with an empty and a non-empty field, then Discord and Keep again (no regression); read the message under « Durée capturée » if it fails.
 4. If an insertion refusal comes back, read the reason shown (table in `insertion.md`) and fix **that rule**; do not reintroduce event-based invalidation or frozen editor sessions.
-5. Then: 10–15 minute endurance (memory, heat), other apps (web fields), English, and the meeting branch.
+5. **Meeting mode (merged, host-tested only)**. Next: install a build from `main` on the Pixel (CI development APK or the next release), prepare the models, then record a 2–5 minute French meeting, stop, let it transcribe and summarize; check the transcript, the summary, Markdown/WAV export and deletion. Then the same with the screen off and locked, then a 30–60 minute session measuring processing time, heat and battery; finally 2 hours. Report the phase and message shown in the « Réunion » tab if anything fails.
+6. Then: 10–15 minute dictation endurance (memory, heat), other apps (web fields), English.
 
-6. **Weekly statistics** (words, dictated time, dictations per week, app-private, shown under the history) are released in v0.2.3 but not checked on the phone yet. Next: check on the Pixel that a dictation increments the current week and that the duration matches « Durée capturée ».
+7. **Weekly statistics** (words, dictated time, dictations per week, app-private, shown under the history) are released in v0.2.3 but not checked on the phone yet. Next: check on the Pixel that a dictation increments the current week and that the duration matches « Durée capturée ».
 
 ## Releases
 
@@ -61,14 +62,15 @@ See the [scope](mvp.md), [architecture](architecture.md), [insertion](insertion.
 
 - **`main`**: published dictation (see releases).
 - **`work/dictation`**: merged into `main`.
-- **`work/meeting`**: sequential meeting mode raccordé et testé sur l'architecture `main`. Comprend le stockage audio incrémental direct sur disque (plafond 2 h), le journal de transcription CRC, le résumé extractif local déterministe, le contrôleur avec exclusion mutuelle dictée/préparation/réunion, le service foreground avec transition micro vers traitement, les exports WAV/Markdown et l'interface utilisateur dans Compose. Validé par 168 tests unitaires/Robolectric, lint vierge et builds debug/release réussis.
-- **`work/meeting-core`** (branche historique dans l'archive privée).
+- **`work/meeting`**: meeting mode wired onto the `main` architecture (direct-to-disk audio capped at 2 h, CRC transcript journal, deterministic local extractive summary, dictation/preparation/meeting mutual exclusion, foreground service switching from microphone to processing, WAV/Markdown export, Compose UI). Merged into `main` on 3 November 2026 after 168 JVM/Robolectric tests, lint and debug/release builds.
+- **`work/meeting-core`**: earlier meeting core, kept in the private archive only; superseded by `work/meeting`.
 
 ## Open review points
 
-1. Insertion : les risques résiduels listés dans `insertion.md` (champs web, Android 29–32).
-2. Réunion séquentielle : vérifier sur Pixel l'endurance d'enregistrement en tâche de fond (écran éteint, verrouillage), le temps de transcription post-enregistrement (RTF) et l'impact thermique/batterie.
-3. Signature et livraison de la version intégrant le mode réunion lorsque la recette sur téléphone sera planifiée.
+1. Insertion: the remaining risks listed in `insertion.md` (composition set before input started and never reported, web fields, recreated editors, Android 29–32).
+2. Microphone FGS armed from a visible activity, microphone closed at rest, stop/revocation/mute/notification reachable. No service silently recreated from an old command. Applies to both `DictationService` and `MeetingService`.
+3. Meeting: background recording endurance (screen off, lock, phone call, another app taking the microphone), post-recording transcription time, RAM, heat and battery on the Pixel. The extractive summary does not separate facts, decisions and actions (an `mvp.md` acceptance criterion); a better summary engine needs a separate decision.
+4. Release of a version including the meeting mode, once the first phone checks are done.
 
 ## Validation
 
@@ -76,4 +78,4 @@ See [ci.md](ci.md#local-build): JVM/Robolectric tests, lint, debug and release b
 
 ## Not verified on a phone yet
 
-Insertion in apps other than Keep and one messaging app, web fields, English quality, 15-minute dictations, keeping the FGS/microphone across app switches and screen lock, airplane mode then return of connectivity, memory, latency, battery and heat, Android 29–32. Host tests are never presented as phone results.
+Insertion in apps other than Keep and one messaging app, web fields, English quality, 15-minute dictations, keeping the FGS/microphone across app switches and screen lock, airplane mode then return of connectivity, memory, latency, battery and heat, Android 29–32, the whole meeting mode. Host tests are never presented as phone results.

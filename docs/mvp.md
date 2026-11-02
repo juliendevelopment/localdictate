@@ -22,7 +22,7 @@ Both modes are in scope; dictation comes first. The meeting summary is neither d
 
 ## Current implementation
 
-The real dictation chain is wired: Parakeet/Silero preparation, microphone service armed from the visible activity, bubble, capture/segmentation/recognition, private transcript and conditional insertion. The meeting mode is not available yet. The boxes below are **phone** criteria: JVM fixtures do not tick them.
+The real dictation chain is wired: Parakeet/Silero preparation, microphone service armed from the visible activity, bubble, capture/segmentation/recognition, private transcript and conditional insertion. The meeting mode is wired (sequential capture then transcription and extractive summary, see [meeting.md](meeting.md)) but not verified on a phone. The boxes below are **phone** criteria: JVM fixtures do not tick them.
 
 Automatic insertion uses the accessibility editing connection on API 33+, without replacing the keyboard. At stop time it requires the same focused field, a fully observable context and a collapsed cursor, and it keeps any word being composed by the keyboard; nothing is replaced. Otherwise (and on API 29–32) the text is copied to the clipboard and stays in the history of the last 5 dictations; the bubble stays ready. Details and field tests: [insertion.md](insertion.md). See also the [architecture](architecture.md) and the [phone test plan](acceptation-pixel.md). Audio still in RAM is lost if the process dies.
 

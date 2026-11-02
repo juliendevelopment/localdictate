@@ -60,4 +60,4 @@ Process death loses audio segments still in RAM; text already synced is recovere
 
 ## Meeting
 
-A separate, visible and **unavailable** mode: no 2-hour capture, no simulated summary, no pasting. The future pipeline must store progressively, keep the full transcript and run a separate local summary engine. Work in progress lives on the `work/meeting-core` branch.
+A separate, visible mode, never pasting into another app: up to 2 hours recorded directly to private storage, then, after stop, local transcription with the dictation engine and a local extractive summary (original sentences with their segment times, no generative model). It shares the usage lock with dictation and preparation. Details: [meeting.md](meeting.md). Host-tested only.
