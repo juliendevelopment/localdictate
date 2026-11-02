@@ -2,6 +2,7 @@ package be.arte.localdictate.asr
 
 import be.arte.localdictate.audio.PcmFramer
 import be.arte.localdictate.audio.SegmentPadder
+import be.arte.localdictate.audio.TimedSpeech
 import be.arte.localdictate.models.ModelFiles
 import com.k2fsa.sherpa.onnx.*
 import java.io.File
@@ -43,20 +44,22 @@ class SileroSegmenter(file: File) : SpeechSegmenter, AutoCloseable {
         sampleRate = 16_000, numThreads = 1, provider = "cpu", debug = false))
     private val framer = PcmFramer()
     private val padder = SegmentPadder()
-    override fun accept(samples: FloatArray): List<FloatArray> {
-        val result = mutableListOf<FloatArray>()
+    override fun accept(samples: FloatArray): List<FloatArray> = acceptTimed(samples).map { it.samples }
+    fun acceptTimed(samples: FloatArray): List<TimedSpeech> {
+        val result = mutableListOf<TimedSpeech>()
         padder.write(samples)
         framer.accept(samples) { vad.acceptWaveform(it); drain(result) }
         return result
     }
-    override fun finish(): List<FloatArray> {
-        val result = mutableListOf<FloatArray>()
+    override fun finish(): List<FloatArray> = finishTimed().map { it.samples }
+    fun finishTimed(): List<TimedSpeech> {
+        val result = mutableListOf<TimedSpeech>()
         framer.finish { vad.acceptWaveform(it); drain(result) }
         vad.flush()
         drain(result)
         return result
     }
-    private fun drain(result: MutableList<FloatArray>) {
+    private fun drain(result: MutableList<TimedSpeech>) {
         while (!vad.empty()) {
             val speech = vad.front()
             vad.pop()
@@ -64,7 +67,7 @@ class SileroSegmenter(file: File) : SpeechSegmenter, AutoCloseable {
                 .coerceAtLeast(0).toInt()
             check(count <= MAX_SEGMENT_SAMPLES) { "Segment VAD trop long" }
             // Real captured audio around the segment (never the zero padding of the last frame).
-            if (count > 0) padder.widen(speech.start, count).takeIf { it.isNotEmpty() }?.let { result += it }
+            if (count > 0) padder.widenTimed(speech.start, count)?.let { result += it }
         }
     }
     override fun close() = vad.release()

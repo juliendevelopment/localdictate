@@ -12,7 +12,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 
-internal data class CapturedPcm(val samples: FloatArray, val originMs: Long)
+internal data class CapturedPcm(val samples: FloatArray, val originMs: Long, val pcm16: ByteArray)
 
 /** stop() releases native recording immediately, even while the producer waits on a full queue. */
 internal class MicrophoneCapture(private val context: Context) {
@@ -87,7 +87,12 @@ internal class MicrophoneCapture(private val context: Context) {
                 }
                 lastData = SystemClock.elapsedRealtime()
                 if (origin == null) origin = lastData - count * 1000L / RATE
-                emit(CapturedPcm(Pcm16.floats(buffer, count), origin))
+                val owned = ByteArray(count * 2)
+                for (i in 0 until count) {
+                    owned[i * 2] = buffer[i].toByte()
+                    owned[i * 2 + 1] = (buffer[i].toInt() shr 8).toByte()
+                }
+                emit(CapturedPcm(Pcm16.floats(buffer, count), origin, owned))
             }
         } finally { stop() }
     }

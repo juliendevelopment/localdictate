@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.update
 import java.io.File
 
 enum class Phase { OFF, LOADING, ARMED, RECORDING, PROCESSING }
-enum class Use { PREPARATION, ARMED, RECOVERY }
+enum class Use { PREPARATION, ARMED, RECOVERY, MEETING }
 
 /** Mutual exclusion includes cancellation/IO unwinding, loading, capture and final paste. */
 class UseGate {
@@ -26,6 +26,7 @@ data class DictationState(
     val phase: Phase = Phase.OFF,
     val preparing: Boolean = false,
     val recovering: Boolean = false,
+    val meetingBusy: Boolean = false,
     val modelsReady: Boolean = false,
     val preparation: String = "Modèles non préparés — environ 488 Mo à télécharger, 1,5 Go libres requis.",
     val progress: Float? = null,
@@ -47,7 +48,7 @@ class DictationController(private val app: Application) {
     val journal = TranscriptJournal(File(app.filesDir, "dictation/transcript.dat"))
     val historyStore = DictationHistory(File(app.filesDir, "dictation/history.dat"))
     val statsStore = DictationStats(File(app.filesDir, "dictation/stats.dat"))
-    private val gate = UseGate()
+    val gate = UseGate()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var preparationJob: Job? = null
     var service: DictationService? = null

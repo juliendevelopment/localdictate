@@ -1,5 +1,7 @@
 package be.arte.localdictate.audio
 
+data class TimedSpeech(val startSample: Long, val samples: FloatArray)
+
 /**
  * Keeps the recent captured audio by absolute sample index and widens each VAD speech segment with a margin
  * before and after it. The VAD ends a segment exactly where silence starts, which clips soft word endings
@@ -28,11 +30,11 @@ class SegmentPadder(
         }
     }
 
-    /** Audio for the speech segment [start, start + length), widened by the margins that are still available. */
-    fun widen(start: Long, length: Int): FloatArray {
+    /** Audio for the speech segment [start, start + length), widened by the margins that are still available, with start sample. */
+    fun widenTimed(start: Long, length: Int): TimedSpeech? {
         val from = maxOf(start - before, emittedEnd, written - ring.size, 0L)
         val to = minOf(start + length + after, written)
-        if (to <= from) return FloatArray(0)
+        if (to <= from) return null
         emittedEnd = to
         val result = FloatArray((to - from).toInt())
         var index = from
@@ -44,6 +46,9 @@ class SegmentPadder(
             offset += count
             index += count
         }
-        return result
+        return TimedSpeech(from, result)
     }
+
+    /** Audio for the speech segment [start, start + length), widened by the margins that are still available. */
+    fun widen(start: Long, length: Int): FloatArray = widenTimed(start, length)?.samples ?: FloatArray(0)
 }

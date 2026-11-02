@@ -31,4 +31,13 @@ class SegmentPadderTest {
         padder.write(ramp(0, 40))
         assertArrayEquals(ramp(24, 16), padder.widen(start = 30, length = 10), 0f)
     }
+
+    @Test fun widenTimedReturnsPaddedStartSampleAndSamples() {
+        val padder = SegmentPadder(rate = 10, before = 3, after = 2, capacity = 100)
+        padder.write(ramp(0, 30))
+        val timed = padder.widenTimed(start = 10, length = 5)
+        org.junit.Assert.assertNotNull(timed)
+        assertEquals(7L, timed!!.startSample)
+        assertArrayEquals(ramp(7, 10), timed.samples, 0f)
+    }
 }
