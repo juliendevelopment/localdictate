@@ -159,6 +159,18 @@ class InsertionServiceTest {
         assertTrue(service.insert(" Bonjour").contains("Insertion observée"))
         noClipboardOrNodeAction()
     }
+    @Test fun emptyFieldShowingItsHintReceivesTheText() = runTest(dispatcher) {
+        // Android reports the hint as the text of an empty TextView; the editor sees an empty field.
+        node.text = "Envoyer un message"; node.isShowingHintText = true; node.setTextSelection(0, 0)
+        editor.context = EditorSurrounding("", 0, 0, 0, false)
+        editor.commitEffect = { text ->
+            node.isShowingHintText = false; node.text = text; node.setTextSelection(text.length, text.length)
+        }
+        assertTrue(service.snapshot())
+        assertTrue(service.insert("Bonjour").contains("Insertion observée"))
+        assertEquals(listOf("Bonjour"), editor.sent)
+        noClipboardOrNodeAction()
+    }
     @Test fun fieldEditedDuringDictationGetsTheTextAtItsCurrentCursor() = runTest(dispatcher) {
         assertTrue(service.snapshot())
         node.text = "abc defgh"; node.setTextSelection(9, 9)

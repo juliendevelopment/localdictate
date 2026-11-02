@@ -19,10 +19,11 @@ Insertion used to fail because of a design error (requiring a "frozen world" dur
 
 1. **Start of speech**: one still has to wait 1–2 s after tapping the bubble before speaking, otherwise the beginning is sometimes missing (about one short phrase in two). v0.1.9 already opens the microphone first. Next: measure on the phone the real delay between the tap and the first audio (AudioRecord start, wake lock, journal write), and consider keeping a short audio buffer from the tap.
 2. **Transcription errors**: some remain, fewer when speaking close to the microphone. Next: compare microphone level/AGC (the VOICE_RECOGNITION source has no gain) and Silero settings, with real sentences and their expected text.
-3. If an insertion refusal comes back, read the reason shown (table in `insertion.md`) and fix **that rule**; do not reintroduce event-based invalidation or frozen editor sessions.
-4. Then: 10–15 minute endurance (memory, heat), other apps (web fields), English, and the meeting branch.
+3. **Insertion in chat apps** (Discord, messaging apps): refused in 0.2.3 while Keep works. Fix pending release: an empty field showing its hint was compared as if the hint were its text (see `insertion.md`). Next: release, then check on the Pixel an empty Discord/messaging field, a non-empty one, and read the message under « Durée capturée » if it still fails.
+4. If an insertion refusal comes back, read the reason shown (table in `insertion.md`) and fix **that rule**; do not reintroduce event-based invalidation or frozen editor sessions.
+5. Then: 10–15 minute endurance (memory, heat), other apps (web fields), English, and the meeting branch.
 
-5. **Weekly statistics** (words, dictated time, dictations per week, app-private, shown under the history) are released in v0.2.3 but not checked on the phone yet. Next: check on the Pixel that a dictation increments the current week and that the duration matches « Durée capturée ».
+6. **Weekly statistics** (words, dictated time, dictations per week, app-private, shown under the history) are released in v0.2.3 but not checked on the phone yet. Next: check on the Pixel that a dictation increments the current week and that the duration matches « Durée capturée ».
 
 ## Releases
 

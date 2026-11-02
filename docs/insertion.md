@@ -24,6 +24,7 @@ This is the reference on automatic insertion of dictated text. It records the ma
 | 0.1.6 | 1st dictation inserted, 2nd not | "invalidée : événement 32 de com.android.systemui" | System UI window (the foreground notification updated by the dictation itself) | 0.1.7 ignores events from other apps |
 | 0.1.7 | Several dictations, none inserted; copy and history OK | "Éditeur non observable, texte en composition ou contexte incompatible" | See analysis: "unknown" composition refused | 0.1.8: redesign below |
 | 0.1.8 | **Inserted reliably**: several dictations in a row in Keep and in a messaging app | — | — | Confirmed by the maintainer |
+| 0.2.3 | Long sessions fine and inserted in Keep, but not in Discord, messaging apps and other chat fields (copy fallback works) | Not reported yet | Likely: an empty `TextView` reports its **hint** as accessibility text (`getTextForAccessibility`, `isShowingHintText`), while the editor sees an empty field → length mismatch. Chat composers are almost always empty with a hint | Next version reads an empty field showing its hint as `""` (start state and read-back) |
 
 What worked on the phone early on: update-in-place with the same key, Parakeet + Silero preparation, good French recognition (punctuation, capitals), draggable bubble, real insertion in Keep, automatic copy and history.
 
@@ -41,7 +42,7 @@ One decision, taken at stop time, on fresh reads, limited to what actually prote
 2. **Accessibility events decide nothing** (`onAccessibilityEvent` is empty).
 3. **At stop**: the focused field must be the same node, in the same app and window, editable, not a password. Its text may have changed (insertion at the current cursor).
 4. The editor is acquired **at that moment** (restarted input on the same field is normal) and must match the field (app, input class + variation, view id).
-5. One complete `getSurroundingText` read: text, length and selection identical to the node's, offset 0.
+5. One complete `getSurroundingText` read: text, length and selection identical to the node's, offset 0. A node showing its hint (`isShowingHintText`) counts as empty: Android puts the hint in the node's text.
 6. **Non-empty selection → refused**: nothing is ever replaced.
 7. **Gboard composition**: `commitText` replaces the composing region. If its position is known (`onUpdateSelection`) and it contains the cursor, the composed word is re-sent with the dictation inside it: every existing character stays. Composition away from the cursor, or a composing marker without a position: refused. No report since the input started = no composition set since then: insert.
 8. The field is checked again right before the send, **a single send** (attempt persisted in the journal first), then read back: same field with exactly the expected text → confirmed.

@@ -72,12 +72,18 @@ open class InsertionService : AccessibilityService() {
     private fun state(node: AccessibilityNodeInfo): TargetState {
         // Password content is never read, even for hashing.
         val password = node.isPassword || TargetPolicy.password(node.inputType)
-        val content = if (password) "" else node.text?.toString().orEmpty()
+        val content = if (password) "" else fieldText(node)
         return TargetState(node.packageName?.toString().orEmpty(), node.windowId,
             node.viewIdResourceName, node.className?.toString().orEmpty(), TargetPolicy.hash(content),
             content.length, node.textSelectionStart, node.textSelectionEnd, node.isEditable,
             password, node.isFocused, node.isVisibleToUser, node.isEnabled, node.inputType)
     }
+    /**
+     * An empty TextView reports its hint as accessibility text (with isShowingHintText); the editor sees "".
+     * Messaging composers are usually empty with a hint, so the hint must not count as content.
+     */
+    private fun fieldText(node: AccessibilityNodeInfo): String =
+        if (node.isShowingHintText) "" else node.text?.toString().orEmpty()
     /** The focused field now, if it is still the field chosen at START and can receive text without loss. */
     private fun currentField(captured: Target): AccessibilityNodeInfo? {
         if (target !== captured || connected !== this) { refusal = "service d’accessibilité déconnecté"; return null }
@@ -135,7 +141,7 @@ open class InsertionService : AccessibilityService() {
                 val node = findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
                 if (node != null && node.refresh() && node.packageName?.toString() == captured.state.packageName &&
                     node.viewIdResourceName == captured.state.viewId) {
-                    val observed = node.text?.toString().orEmpty()
+                    val observed = fieldText(node)
                     if (observed == plan.expected && (node.textSelectionStart == plan.cursor &&
                             node.textSelectionEnd == plan.cursor || node.textSelectionStart < 0)) return@withContext OBSERVED
                     seen = "texte ${observed.length}/${plan.expected.length} car., curseur ${node.textSelectionStart}-" +
