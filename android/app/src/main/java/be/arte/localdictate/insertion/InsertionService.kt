@@ -5,8 +5,14 @@ import android.os.Build
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
@@ -16,11 +22,20 @@ import kotlinx.coroutines.withContext
  * the input focus, the editor connected to it agrees with it, the cursor is collapsed and any keyboard
  * composition is preserved. Window/focus events and editor restarts during a dictation are normal on a
  * phone and are not used (see docs/insertion.md).
+ *
+ * Web fields and custom views may expose the focused field as non-editable while the keyboard types into it.
+ * Such a field is targeted through the keyboard's editor only, under stricter rules: same focused node and
+ * same editor field at stop, and the editor's text and cursor unchanged since START.
  */
 open class InsertionService : AccessibilityService() {
-    private class Target(val node: AccessibilityNodeInfo, val state: TargetState) {
+    private class Target(val node: AccessibilityNodeInfo, val state: TargetState, val editor: EditorIdentity? = null) {
         var attempted = false
+        /** Editor-only target: the field content read once, off main, right after START. */
+        @Volatile var before: EditorStart? = null
+        var reading: Job? = null
     }
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    internal var startReadDispatcher: CoroutineDispatcher = Dispatchers.IO
     private var target: Target? = null
     private val inserting = AtomicBoolean(false)
     private var refusal = ""
@@ -38,6 +53,7 @@ open class InsertionService : AccessibilityService() {
     override fun onDestroy() {
         if (connected === this) connected = null
         forget()
+        scope.cancel()
         super.onDestroy()
     }
     /** Non-content reason for the last refused snapshot, shown to the user to diagnose targets. */
@@ -52,12 +68,8 @@ open class InsertionService : AccessibilityService() {
         if (node == null) { lastRefusal = "aucun champ au focus de saisie"; return false }
         if (!node.refresh()) { lastRefusal = "champ non rafraîchissable"; return false }
         val state = state(node)
-        if (!TargetPolicy.eligible(state, packageName) || state.length > DirectContextPolicy.MAX_FIELD_LENGTH) {
-            lastRefusal = "champ non éligible (modifiable=${state.editable} visible=${state.visible} " +
-                "actif=${state.enabled} mot de passe=${state.password} focus=${state.focused} " +
-                "sélection=${state.start}-${state.end}/${state.length})"
-            return false
-        }
+        if (!TargetPolicy.eligible(state, packageName) || state.length > DirectContextPolicy.MAX_FIELD_LENGTH)
+            return snapshotEditorOnly(node, state)
         val editor = directEditor.acquire()
         if (editor == null) { lastRefusal = "éditeur direct indisponible (entrée de saisie non démarrée)"; return false }
         if (!DirectContextPolicy.sameEditor(state, editor.identity)) {
@@ -68,7 +80,26 @@ open class InsertionService : AccessibilityService() {
         target = Target(node, state)
         return true
     }
-    fun forget() { target = null }
+    /** The focused node is not a usable text field for accessibility; the keyboard's editor may still be. */
+    private fun snapshotEditorOnly(node: AccessibilityNodeInfo, state: TargetState): Boolean {
+        val field = "modifiable=${state.editable} visible=${state.visible} actif=${state.enabled} " +
+            "mot de passe=${state.password} focus=${state.focused} sélection=${state.start}-${state.end}/${state.length} " +
+            "classe=${state.className.substringAfterLast('.')}"
+        // An editable field refused by the normal rules (too long, selection) is never retried through the editor.
+        if (state.editable || !TargetPolicy.editorOnlyEligible(state, packageName)) { lastRefusal = "champ non éligible ($field)"; return false }
+        val editor = directEditor.acquire()
+        if (editor == null) { lastRefusal = "champ non éligible et aucun éditeur de saisie ($field)"; return false }
+        if (editor.identity.packageName != state.packageName) {
+            lastRefusal = "éditeur d’une autre application (${editor.identity.packageName}) ($field)"; return false
+        }
+        val captured = Target(node, state, editor.identity)
+        captured.reading = scope.launch {
+            captured.before = withContext(startReadDispatcher) { runCatching { editor.surrounding() }.getOrNull()?.let(EditorStart::of) }
+        }
+        target = captured
+        return true
+    }
+    fun forget() { target?.reading?.cancel(); target = null }
     private fun state(node: AccessibilityNodeInfo): TargetState {
         // Password content is never read, even for hashing.
         val password = node.isPassword || TargetPolicy.password(node.inputType)
@@ -94,6 +125,8 @@ open class InsertionService : AccessibilityService() {
         refusal = when {
             focus != captured.node || now.packageName != old.packageName || now.windowId != old.windowId ||
                 now.viewId != old.viewId || now.className != old.className -> "autre champ ou autre application au focus"
+            captured.editor != null -> if (TargetPolicy.editorOnlyEligible(now, packageName)) return focus
+                else "champ masqué, inactif ou mot de passe"
             !TargetPolicy.eligible(now, packageName) -> "champ non modifiable, masqué ou mot de passe"
             now.length > DirectContextPolicy.MAX_FIELD_LENGTH -> "champ trop long"
             now.start != now.end -> "texte sélectionné dans le champ : rien n’est remplacé"
@@ -109,6 +142,7 @@ open class InsertionService : AccessibilityService() {
             if (captured == null) return@withContext "$FALLBACK (aucune cible au démarrage)"
             if (captured.attempted) return@withContext "$FALLBACK (déjà tentée)"
             if (text.isBlank()) return@withContext "$FALLBACK (texte vide)"
+            if (captured.editor != null) return@withContext insertThroughEditor(captured, text) { requested = true }
             val field = currentField(captured) ?: return@withContext "$FALLBACK ($refusal)"
             val state = state(field)
             // Acquired now: the keyboard or the app may restart input on the same field during a dictation.
@@ -155,6 +189,44 @@ open class InsertionService : AccessibilityService() {
             if (target === captured) forget()
             inserting.set(false)
         }
+    }
+    /** Editor-only target: the editor's text and cursor must be exactly those read at START. */
+    private suspend fun insertThroughEditor(captured: Target, text: String, onRequested: () -> Unit): String {
+        captured.reading?.join() // One InputConnection read, bounded by the framework, finished long before stop.
+        val before = captured.before ?: return "$FALLBACK (contenu du champ illisible au démarrage)"
+        currentField(captured) ?: return "$FALLBACK ($refusal)"
+        val editor = directEditor.acquire() ?: return "$FALLBACK (éditeur direct indisponible)"
+        if (!editor.isCurrent() || !DirectContextPolicy.sameField(checkNotNull(captured.editor), editor.identity))
+            return "$FALLBACK (autre champ de saisie)"
+        captured.attempted = true
+        val context = withContext(Dispatchers.IO) { editor.surrounding() }
+        DirectContextPolicy.changedSince(before, context)?.let { reason ->
+            return "$FALLBACK ($reason ; éditeur : ${editor.describe()})"
+        }
+        val surrounding = checkNotNull(context)
+        currentField(captured) ?: return "$FALLBACK (champ modifié pendant la lecture : $refusal)"
+        if (!editor.canCommit(surrounding)) return "$FALLBACK (le clavier vient de changer le champ : ${editor.describe()})"
+        val plan = DirectContextPolicy.plan(surrounding, text) ?: return "$FALLBACK (composition du clavier hors du curseur)"
+        if (plan.expected.length > DirectContextPolicy.MAX_FIELD_LENGTH)
+            return "Texte trop long pour une insertion vérifiable : utilisez Copier."
+        onRequested()
+        editor.commit(plan.text)
+        // The node does not show the field's text here: confirm by reading the editor back, never resend.
+        var seen = "aucun éditeur observé"
+        repeat(6) {
+            delay(250)
+            val now = directEditor.acquire()
+            if (now != null && DirectContextPolicy.sameField(captured.editor, now.identity)) {
+                val observed = withContext(Dispatchers.IO) { runCatching { now.surrounding() }.getOrNull() }
+                if (observed != null && observed.offset == 0) {
+                    if (observed.text == plan.expected && observed.start == plan.cursor && observed.end == plan.cursor)
+                        return OBSERVED
+                    seen = "texte ${observed.text.length}/${plan.expected.length} car., curseur ${observed.start}-" +
+                        "${observed.end} attendu ${plan.cursor}"
+                }
+            }
+        }
+        return "$UNCERTAIN ($seen)"
     }
     companion object {
         const val OBSERVED = "Insertion observée dans le champ."

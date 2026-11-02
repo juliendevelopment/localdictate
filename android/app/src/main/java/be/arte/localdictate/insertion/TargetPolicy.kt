@@ -34,6 +34,10 @@ object TargetPolicy {
         target.packageName.isNotBlank() && target.packageName != ownPackage &&
             target.editable && target.visible && target.enabled && !target.password && target.focused &&
             target.start in 0..target.length && target.end in target.start..target.length
+    /** A focused field the keyboard may type into although accessibility does not show it as editable. */
+    fun editorOnlyEligible(target: TargetState, ownPackage: String): Boolean =
+        target.packageName.isNotBlank() && target.packageName != ownPackage &&
+            target.visible && target.enabled && !target.password && target.focused
     fun unchanged(original: TargetState, current: TargetState, ownPackage: String): Boolean =
         eligible(original, ownPackage) && eligible(current, ownPackage) && original == current
     fun insertedText(original: String, start: Int, end: Int, transcript: String): String {

@@ -34,6 +34,14 @@ internal data class EditorSurrounding(
     val composingEnd: Int = -1,
 )
 
+/** Editor-only target at START: no field text is kept between START and stop, only its hash. */
+internal data class EditorStart(val contentHash: String, val length: Int, val start: Int, val end: Int, val offset: Int) {
+    companion object {
+        fun of(context: EditorSurrounding) = EditorStart(TargetPolicy.hash(context.text), context.text.length,
+            context.start, context.end, context.offset)
+    }
+}
+
 /** What to send with commitText, and what the field must contain afterwards. */
 internal data class CommitPlan(val text: String, val expected: String, val cursor: Int)
 
@@ -59,6 +67,23 @@ internal object DirectContextPolicy {
         context.start != target.start || context.end != target.end ->
             "sélection différente (champ ${target.start}-${target.end}, éditeur ${context.start}-${context.end})"
         TargetPolicy.hash(context.text) != target.contentHash -> "texte différent entre le champ et l’éditeur"
+        else -> null
+    }
+    /** Same editor field: restarted input on it is normal, another field (even in the same view) is not. */
+    fun sameField(a: EditorIdentity, b: EditorIdentity): Boolean =
+        a.packageName == b.packageName && a.fieldId == b.fieldId && a.fieldName == b.fieldName &&
+            a.viewId == b.viewId && sameInputKind(a.inputType, b.inputType) && !TargetPolicy.password(b.inputType)
+    /** Editor-only target: non-content reason why the field is not exactly as it was at START, or null. */
+    fun changedSince(before: EditorStart, now: EditorSurrounding?): String? = when {
+        now == null -> "contexte de l’éditeur illisible"
+        now.composing -> "composition du clavier à une position inconnue"
+        before.offset != 0 || now.offset != 0 -> "contexte tronqué (décalage ${before.offset}/${now.offset})"
+        now.text.length > MAX_FIELD_LENGTH -> "champ trop long"
+        now.text.length != before.length || TargetPolicy.hash(now.text) != before.contentHash ->
+            "texte du champ modifié pendant la dictée (${before.length} → ${now.text.length} car.)"
+        now.start != before.start || now.end != before.end ->
+            "curseur déplacé pendant la dictée (${before.start}-${before.end} → ${now.start}-${now.end})"
+        now.start != now.end -> "texte sélectionné dans le champ : rien n’est remplacé"
         else -> null
     }
     fun matches(target: TargetState, identity: EditorIdentity, context: EditorSurrounding?): Boolean =

@@ -24,7 +24,8 @@ This is the reference on automatic insertion of dictated text. It records the ma
 | 0.1.6 | 1st dictation inserted, 2nd not | "invalidée : événement 32 de com.android.systemui" | System UI window (the foreground notification updated by the dictation itself) | 0.1.7 ignores events from other apps |
 | 0.1.7 | Several dictations, none inserted; copy and history OK | "Éditeur non observable, texte en composition ou contexte incompatible" | See analysis: "unknown" composition refused | 0.1.8: redesign below |
 | 0.1.8 | **Inserted reliably**: several dictations in a row in Keep and in a messaging app | — | — | Confirmed by the maintainer |
-| 0.2.3 | Long sessions fine and inserted in Keep, but not in Discord, messaging apps and other chat fields (copy fallback works) | Not reported yet | Likely: an empty `TextView` reports its **hint** as accessibility text (`getTextForAccessibility`, `isShowingHintText`), while the editor sees an empty field → length mismatch. Chat composers are almost always empty with a hint | 0.2.4 reads an empty field showing its hint as `""` (start state and read-back) |
+| 0.2.3 | Long sessions fine and inserted in Keep, but not in Discord, messaging apps and other chat fields (copy fallback works) | Not reported | Likely: an empty `TextView` reports its **hint** as accessibility text (`getTextForAccessibility`, `isShowingHintText`), while the editor sees an empty field → length mismatch. Chat composers are almost always empty with a hint | 0.2.4 reads an empty field showing its hint as `""` (start state and read-back) |
+| 0.2.4 | Still not inserted in a chat app, although the cursor is in the field | "Pas de champ compatible au démarrage (champ non éligible (modifiable=false visible=true actif=true mot de passe=false focus=true sélection=-1--1/77))" | The focused accessibility node is **not exposed as editable** (web field or custom view) although the keyboard types into it. Second failure with a different reason: design revisited (below) | 0.2.5: editor-only target |
 
 What worked on the phone early on: update-in-place with the same key, Parakeet + Silero preparation, good French recognition (punctuation, capitals), draggable bubble, real insertion in Keep, automatic copy and history.
 
@@ -47,6 +48,15 @@ One decision, taken at stop time, on fresh reads, limited to what actually prote
 7. **Gboard composition**: `commitText` replaces the composing region. If its position is known (`onUpdateSelection`) and it contains the cursor, the composed word is re-sent with the dictation inside it: every existing character stays. Composition away from the cursor, or a composing marker without a position: refused. No report since the input started = no composition set since then: insert.
 8. The field is checked again right before the send, **a single send** (attempt persisted in the journal first), then read back: same field with exactly the expected text → confirmed.
 9. **End of dictation** (`DictationService`): the text goes to the history **before** any attempt. Confirmed → journal cleared. Otherwise → automatic copy to the clipboard (replacing the previous clip, explicitly accepted by the maintainer), journal cleared once the history is written, bubble ready with the notice « Non inséré • texte copié, collez-le ». Interrupted dictation: journal kept as before. Since v0.2.0, ✕ on the bubble cancels: nothing inserted or copied, text kept in the history.
+
+### Editor-only target (since v0.2.5)
+
+Rules 1–8 trust the accessibility node to describe the field. Web fields and custom views (some chat apps) expose a focused node that is not editable, has no selection and whose text is not the field's. The keyboard still types there through its editor, which is the source of truth for "where the keyboard would type". When the focused node is **not editable**, visible, enabled, not a password, in another app, and the keyboard's editor (API 33+) belongs to the same app:
+
+- **At start**: node and editor field identity (app, field id/name, view id, input class + variation) are recorded, and the editor's text is read once off the main thread; only its hash, length and cursor are kept.
+- **At stop**: same focused node in the same window, same editor field (a restarted input is fine, another field is not), editor text and cursor **identical to the start** (stricter than rule 3: the user does not type while dictating), collapsed cursor, composition rules as in 7. A single send.
+- **Confirmation**: by reading the editor back (the node does not show the field's text): exact expected text and cursor.
+- An editable node refused by rules 1–8 (too long, selection) is never retried through this path.
 
 These rules replace the earlier ones (unknown composition refused, invalidation by events, frozen editor session, replacement of the selection).
 

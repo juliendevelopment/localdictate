@@ -55,6 +55,7 @@ class InsertionServiceTest {
         FocusedServiceShadow.queries = 0
         editor = FixtureEditor()
         service.directEditor = DirectEditor { editor }
+        service.startReadDispatcher = dispatcher
         clipboard.setPrimaryClip(ClipData.newPlainText("user", "À garder"))
         ClipboardSpyShadow.calls.clear()
         ClipboardSpyShadow.denyRead = false
@@ -170,6 +171,72 @@ class InsertionServiceTest {
         assertTrue(service.insert("Bonjour").contains("Insertion observée"))
         assertEquals(listOf("Bonjour"), editor.sent)
         noClipboardOrNodeAction()
+    }
+    /** Web or custom view: focused, not exposed as editable, no selection; the keyboard's editor holds the field. */
+    private fun editorOnlyField(fieldText: String = "Salut", cursor: Int = fieldText.length) {
+        node.isEditable = false; node.text = "Conversation avec Marie, 3 messages non lus"; node.setTextSelection(-1, -1)
+        node.className = "android.webkit.WebView"
+        editor.context = EditorSurrounding(fieldText, cursor, cursor, 0, false)
+        editor.commitEffect = { sent ->
+            val now = checkNotNull(editor.context)
+            val text = TargetPolicy.insertedText(now.text, now.start, now.end, sent)
+            editor.context = EditorSurrounding(text, now.start + sent.length, now.start + sent.length, 0, false)
+        }
+    }
+    @Test fun nonEditableFocusedFieldReceivesTheTextThroughTheKeyboardEditor() = runTest(dispatcher) {
+        editorOnlyField()
+        assertTrue(service.snapshot())
+        assertTrue(service.insert(" Bonjour").contains("Insertion observée"))
+        assertEquals(listOf(" Bonjour"), editor.sent)
+        assertEquals("Salut Bonjour", editor.context!!.text)
+        noClipboardOrNodeAction()
+    }
+    @Test fun editorOnlyFieldChangedDuringTheDictationIsRefused() = runTest(dispatcher) {
+        editorOnlyField()
+        assertTrue(service.snapshot()); advanceUntilIdle()
+        editor.context = EditorSurrounding("Salut toi", 9, 9, 0, false)
+        assertTrue(service.insert(" Bonjour").contains("modifié pendant la dictée"))
+        assertEquals(0, editor.commits); noClipboardOrNodeAction()
+    }
+    @Test fun editorOnlyCursorMovedOrSelectionIsRefused() = runTest(dispatcher) {
+        for (moved in listOf(EditorSurrounding("Salut", 2, 2, 0, false), EditorSurrounding("Salut", 0, 5, 0, false))) {
+            editorOnlyField()
+            assertTrue(service.snapshot()); advanceUntilIdle()
+            editor.context = moved
+            assertTrue(service.insert("Bonjour").startsWith("Insertion refusée"))
+            assertEquals(0, editor.commits)
+        }
+    }
+    @Test fun editorOnlyAnotherFieldOrNodeIsRefused() = runTest(dispatcher) {
+        editorOnlyField()
+        assertTrue(service.snapshot()); advanceUntilIdle()
+        editor.identity = EditorIdentity("fixture.notes", 123, "search", 1)
+        assertTrue(service.insert("Bonjour").contains("autre champ de saisie"))
+        editorOnlyField(); editor.identity = EditorIdentity("fixture.notes", 123, "input", 1)
+        assertTrue(service.snapshot()); advanceUntilIdle()
+        setWindow(8)
+        assertTrue(service.insert("Bonjour").contains("autre champ ou autre application"))
+        assertEquals(0, editor.commits)
+    }
+    @Test fun editorOnlyPasswordUnfocusedOrForeignEditorIsNotTargeted() {
+        for (setup in listOf<() -> Unit>({ node.isPassword = true }, { node.isFocused = false },
+            { editor.identity = EditorIdentity("other.app", 1, "input", 1) })) {
+            editorOnlyField(); editor.identity = EditorIdentity("fixture.notes", 123, "input", 1)
+            node.isPassword = false; node.isFocused = true
+            setup()
+            assertFalse(service.snapshot())
+        }
+        editorOnlyField(); editor.identity = EditorIdentity("fixture.notes", 123, "input", 1)
+        service.directEditor = DirectEditor { null }
+        assertFalse(service.snapshot())
+        assertTrue(service.lastRefusal.contains("aucun éditeur"))
+    }
+    @Test fun editorOnlyUnreadableStartIsRefused() = runTest(dispatcher) {
+        editorOnlyField(); editor.context = null
+        assertTrue(service.snapshot()); advanceUntilIdle()
+        editor.context = EditorSurrounding("Salut", 5, 5, 0, false)
+        assertTrue(service.insert("Bonjour").contains("illisible au démarrage"))
+        assertEquals(0, editor.commits)
     }
     @Test fun fieldEditedDuringDictationGetsTheTextAtItsCurrentCursor() = runTest(dispatcher) {
         assertTrue(service.snapshot())
