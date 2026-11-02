@@ -45,7 +45,7 @@ class MainActivityTest {
     @Test fun meetingIsHonestAndNeverStartsAService() {
         compose.onNodeWithTag("mode-meeting").performClick()
         compose.onNodeWithText("Jusqu’à 2 heures").assertIsDisplayed()
-        compose.onNodeWithTag("meeting-unavailable").assertIsDisplayed()
+        compose.onNodeWithTag("meeting-start").assertIsDisplayed()
         compose.onNodeWithText("Aucun collage automatique", substring = true).assertIsDisplayed()
         compose.onNodeWithTag("arm").assertDoesNotExist()
         compose.runOnIdle { assertNull(shadowOf(compose.activity).nextStartedService) }

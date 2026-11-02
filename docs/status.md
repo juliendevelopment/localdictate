@@ -61,13 +61,14 @@ See the [scope](mvp.md), [architecture](architecture.md), [insertion](insertion.
 
 - **`main`**: published dictation (see releases).
 - **`work/dictation`**: merged into `main`.
-- **`work/meeting-core`** (not published yet, kept in the private archive): audio storage, journal, extractive summary, controller, pipeline, repository, service and export started. UI/manifest/tests wiring and transitions still to finish and review; do not assume this branch compiles. To be reconciled with `MicrophoneCapture`, the controllers and the UI of `main`, not with "ours/theirs".
+- **`work/meeting`**: sequential meeting mode raccordé et testé sur l'architecture `main`. Comprend le stockage audio incrémental direct sur disque (plafond 2 h), le journal de transcription CRC, le résumé extractif local déterministe, le contrôleur avec exclusion mutuelle dictée/préparation/réunion, le service foreground avec transition micro vers traitement, les exports WAV/Markdown et l'interface utilisateur dans Compose. Validé par 168 tests unitaires/Robolectric, lint vierge et builds debug/release réussis.
+- **`work/meeting-core`** (branche historique dans l'archive privée).
 
 ## Open review points
 
-1. Insertion: the remaining risks listed in `insertion.md` (composition set before input started and never reported, web fields, recreated editors, Android 29–32).
-2. Microphone FGS armed from a visible activity, microphone closed at rest, stop/revocation/mute/notification reachable. No service silently recreated from an old command.
-3. Meeting: one usage lock shared with preparation/dictation; app-private audio bounded on disk, capture first then real streaming ASR, timestamps from the audio. Never lose the transcript if the summary or export fails.
+1. Insertion : les risques résiduels listés dans `insertion.md` (champs web, Android 29–32).
+2. Réunion séquentielle : vérifier sur Pixel l'endurance d'enregistrement en tâche de fond (écran éteint, verrouillage), le temps de transcription post-enregistrement (RTF) et l'impact thermique/batterie.
+3. Signature et livraison de la version intégrant le mode réunion lorsque la recette sur téléphone sera planifiée.
 
 ## Validation
 
