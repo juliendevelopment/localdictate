@@ -50,6 +50,29 @@ class MainActivityTest {
         compose.onNodeWithTag("arm").assertDoesNotExist()
         compose.runOnIdle { assertNull(shadowOf(compose.activity).nextStartedService) }
     }
+    @Test fun selectedModeIsHighlighted() {
+        compose.onNodeWithTag("mode-dictation").assertIsSelected()
+        compose.onNodeWithTag("mode-meeting").assertIsNotSelected()
+        compose.onNodeWithTag("mode-meeting").performClick()
+        compose.onNodeWithTag("mode-meeting").assertIsSelected()
+        compose.onNodeWithTag("mode-dictation").assertIsNotSelected()
+    }
+    @Test fun eachSavedMeetingCanBeDeletedAfterConfirmation() {
+        val meetings = (compose.activity.application as DictateApplication).meetings
+        val session = meetings.repository.create(be.arte.localdictate.meeting.SummaryLanguage.FRENCH)
+            .copy(phase = be.arte.localdictate.meeting.MeetingPhase.RECORDED)
+        meetings.repository.save(session)
+        kotlinx.coroutines.runBlocking { meetings.refresh() }
+        compose.onNodeWithTag("mode-meeting").performClick()
+        compose.onNodeWithTag("meeting-delete-${session.id}").performScrollTo().performClick()
+        compose.onNodeWithText("Annuler").performClick()
+        compose.runOnIdle { assertTrue(meetings.repository.directory(session.id).exists()) }
+        compose.onNodeWithTag("meeting-delete-${session.id}").performScrollTo().performClick()
+        compose.onNodeWithTag("meeting-delete-confirm").performClick()
+        compose.waitUntil(5_000) { !java.io.File(meetings.repository.root, session.id).exists() }
+        compose.waitUntil(5_000) { meetings.state.value.sessions.none { it.id == session.id } }
+        compose.onNodeWithTag("meeting-delete-${session.id}").assertDoesNotExist()
+    }
     @Test fun selectedModeSurvivesRecreationWithoutArming() {
         compose.onNodeWithTag("mode-meeting").performClick()
         compose.activityRule.scenario.recreate()

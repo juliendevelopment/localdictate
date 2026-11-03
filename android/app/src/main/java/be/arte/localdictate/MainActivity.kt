@@ -22,6 +22,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -153,6 +155,7 @@ private fun HomeScreen(
     var meeting by rememberSaveable { mutableStateOf(false) }
     var disclosure by rememberSaveable { mutableStateOf(false) }
     var summarize by rememberSaveable { mutableStateOf(false) }
+    var deleting by rememberSaveable { mutableStateOf<String?>(null) }
     var licenses by rememberSaveable { mutableStateOf(false) }
     var notices by rememberSaveable { mutableStateOf(false) }
     Surface(Modifier.fillMaxSize()) {
@@ -161,8 +164,8 @@ private fun HomeScreen(
             Text("LocalDictate", style = MaterialTheme.typography.headlineLarge)
             Text("Dictée locale • français et anglais", style = MaterialTheme.typography.titleMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(onClick = { meeting = false }, modifier = Modifier.testTag("mode-dictation")) { Text("Dictée") }
-                OutlinedButton(onClick = { meeting = true }, modifier = Modifier.testTag("mode-meeting")) { Text("Réunion") }
+                ModeButton("Dictée", selected = !meeting, tag = "mode-dictation") { meeting = false }
+                ModeButton("Réunion", selected = meeting, tag = "mode-meeting") { meeting = true }
             }
             if (meeting) {
                 Text("Jusqu’à 2 heures", style = MaterialTheme.typography.titleLarge)
@@ -234,7 +237,7 @@ private fun HomeScreen(
                         OutlinedButton(onClick = { exportMeeting(session.id, true) }, modifier = Modifier.testTag("meeting-export-wav")) {
                             Text("Export WAV")
                         }
-                        TextButton(onClick = { deleteMeeting(session.id) }, modifier = Modifier.testTag("meeting-delete")) {
+                        TextButton(onClick = { deleting = session.id }, modifier = Modifier.testTag("meeting-delete")) {
                             Text("Supprimer")
                         }
                     }
@@ -264,8 +267,13 @@ private fun HomeScreen(
                                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Text("Réunion du ${java.time.Instant.ofEpochMilli(s.createdMs).atZone(java.time.ZoneId.systemDefault()).toLocalDateTime().format(java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy HH:mm"))}")
                                     Text("Durée : ${s.durationMs / 1000} s • État : ${s.phase}")
-                                    OutlinedButton(onClick = { selectMeeting(s.id) }, modifier = Modifier.testTag("meeting-open-${s.id}")) {
-                                        Text("Consulter")
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        OutlinedButton(onClick = { selectMeeting(s.id) }, modifier = Modifier.testTag("meeting-open-${s.id}")) {
+                                            Text("Consulter")
+                                        }
+                                        TextButton(onClick = { deleting = s.id }, modifier = Modifier.testTag("meeting-delete-${s.id}")) {
+                                            Text("Supprimer")
+                                        }
                                     }
                                 }
                             }
@@ -348,6 +356,12 @@ private fun HomeScreen(
             text = { SelectionContainer { Text(content, modifier = Modifier.verticalScroll(rememberScrollState())) } },
             confirmButton = { TextButton(onClick = { notices = false }) { Text("Fermer") } })
     }
+    deleting?.let { id ->
+        AlertDialog(onDismissRequest = { deleting = null }, title = { Text("Supprimer cette réunion ?") },
+            text = { Text("L’audio, les transcriptions et le résumé de cette réunion seront effacés du téléphone. Cette action est définitive ; exportez ou copiez d’abord ce que vous voulez garder.") },
+            confirmButton = { TextButton(onClick = { deleting = null; deleteMeeting(id) }, modifier = Modifier.testTag("meeting-delete-confirm")) { Text("Supprimer") } },
+            dismissButton = { TextButton(onClick = { deleting = null }) { Text("Annuler") } })
+    }
     if (disclosure) AlertDialog(onDismissRequest = { disclosure = false },
         title = { Text("Accès d’accessibilité") },
         text = { Text("Android autorise un accès large au contenu des fenêtres. LocalDictate consulte seulement le champ ciblé au démarrage explicite d’une dictée, puis le revalide pour insérer à l’arrêt. Aucune lecture permanente, aucun historique d’écran, aucun champ de mot de passe. Tout reste local. Vous pouvez révoquer cet accès dans les paramètres.") },
@@ -381,4 +395,12 @@ private fun SetupRow(label: String, granted: Boolean, action: () -> Unit, tag: S
     OutlinedButton(onClick = action, modifier = Modifier.fillMaxWidth().testTag(tag)) {
         Text("$label : ${if (granted) "autorisé" else "à autoriser"}")
     }
+}
+
+/** The selected mode is the filled button, the other one outlined. */
+@Composable
+private fun ModeButton(label: String, selected: Boolean, tag: String, onClick: () -> Unit) {
+    val modifier = Modifier.testTag(tag).semantics { this.selected = selected }
+    if (selected) Button(onClick = onClick, modifier = modifier) { Text(label) }
+    else OutlinedButton(onClick = onClick, modifier = modifier) { Text(label) }
 }
