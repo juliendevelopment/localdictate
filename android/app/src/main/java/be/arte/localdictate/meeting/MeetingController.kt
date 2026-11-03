@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.ClipData
 import android.content.Intent
 import androidx.core.content.FileProvider
+import be.arte.localdictate.insertion.PrivateClipboard
 import be.arte.localdictate.session.DictationController
 import be.arte.localdictate.session.Use
 import kotlinx.coroutines.*
@@ -19,7 +20,7 @@ data class MeetingState(
     val page: TranscriptPage? = null, val journals: List<String> = emptyList(), val summary: String = "", val durationMs: Long = 0,
     val processedMs: Long = 0, val message: String = "Aucun enregistrement automatique.", val error: String? = null,
 )
-data class MeetingLaunch(val token: String, val id: String?, val language: SummaryLanguage)
+data class MeetingLaunch(val token: String, val id: String?, val language: SummaryLanguage, val summarize: Boolean = false)
 
 /** Application-scoped state. Only reserve() from an explicit resumed Activity can authorize a service. */
 class MeetingController(private val app: Application, private val dictation: DictationController) {
@@ -43,9 +44,9 @@ class MeetingController(private val app: Application, private val dictation: Dic
         dictation.update { it.copy(meetingBusy = false) }
         update { it.copy(busy = false, phase = null) }
     }
-    @Synchronized fun reserve(id: String?, language: SummaryLanguage): MeetingLaunch? {
+    @Synchronized fun reserve(id: String?, language: SummaryLanguage, summarize: Boolean = false): MeetingLaunch? {
         if (!dictation.models.isReady() || !acquire()) return null
-        return MeetingLaunch(UUID.randomUUID().toString(), id, language).also { pending = it }
+        return MeetingLaunch(UUID.randomUUID().toString(), id, language, summarize).also { pending = it }
     }
     @Synchronized fun consume(token: String?): MeetingLaunch? {
         val request = pending ?: return null
@@ -86,6 +87,18 @@ class MeetingController(private val app: Application, private val dictation: Dic
         repository.delete(id)
         update { it.copy(selected = null, page = null, summary = "", message = "Réunion supprimée explicitement.") }
         refresh()
+    }
+    /** Plain transcript of the current journal, copied as sensitive content; the user pastes it. */
+    fun copyTranscript(id: String) = operation {
+        val session = state.value.selected?.takeIf { it.id == id } ?: repository.read(id)
+        val transcript = runCatching { repository.plainText(session) }.getOrElse {
+            update { it.copy(error = "Transcription trop longue ou illisible pour le presse-papiers : utilisez l’export Markdown.") }
+            return@operation
+        }
+        if (transcript.text.isEmpty()) { update { it.copy(error = "Aucun texte transcrit à copier.") }; return@operation }
+        withContext(Dispatchers.Main) { PrivateClipboard(app).put(transcript.text) }
+        update { it.copy(error = null, message = "Transcription copiée (${transcript.text.length} caractères) comme contenu sensible. Collez-la vous-même." +
+            if (transcript.complete) "" else " Journal partiel : seul le début vérifié est copié.") }
     }
     fun export(id: String, wav: Boolean, share: (Intent) -> Unit) = operation {
         val session = state.value.selected?.takeIf { it.id == id } ?: repository.read(id)

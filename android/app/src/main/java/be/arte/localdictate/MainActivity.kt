@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
@@ -77,6 +78,7 @@ class MainActivity : ComponentActivity() {
                     selectMeeting = model.meetings::select,
                     unselectMeeting = { model.meetings.update { it.copy(selected = null, page = null, summary = "") } },
                     deleteMeeting = model.meetings::delete,
+                    copyMeeting = model.meetings::copyTranscript,
                     exportMeeting = { id, wav -> model.meetings.export(id, wav) { startActivity(it) } })
             }
         }
@@ -106,10 +108,10 @@ class MainActivity : ComponentActivity() {
         try { startForegroundService(Intent(this, DictationService::class.java).setAction(DictationService.ARM)) }
         catch (_: Exception) { controller.armFailed() }
     }
-    private fun startMeeting(language: SummaryLanguage = SummaryLanguage.FRENCH) {
+    private fun startMeeting(summarize: Boolean) {
         refreshPermissions()
         if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) || !readiness.microphone || !readiness.notifications) return
-        val launch = meetings.reserve(id = null, language = language) ?: return
+        val launch = meetings.reserve(id = null, language = SummaryLanguage.FRENCH, summarize = summarize) ?: return
         try {
             startForegroundService(Intent(this, MeetingService::class.java).apply {
                 action = MeetingService.START
@@ -119,10 +121,10 @@ class MainActivity : ComponentActivity() {
             meetings.launchFailed(launch.token)
         }
     }
-    private fun processMeeting(sessionId: String, language: SummaryLanguage = SummaryLanguage.FRENCH) {
+    private fun processMeeting(sessionId: String, language: SummaryLanguage, summarize: Boolean) {
         refreshPermissions()
         if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) || !readiness.notifications) return
-        val launch = meetings.reserve(id = sessionId, language = language) ?: return
+        val launch = meetings.reserve(id = sessionId, language = language, summarize = summarize) ?: return
         try {
             startForegroundService(Intent(this, MeetingService::class.java).apply {
                 action = MeetingService.START
@@ -143,13 +145,14 @@ private fun HomeScreen(
     microphone: () -> Unit, notifications: () -> Unit, overlay: () -> Unit, accessibility: () -> Unit,
     arm: () -> Unit, stop: () -> Unit, disarm: () -> Unit, copy: () -> Unit, clear: () -> Unit,
     copyText: (String) -> Unit, clearHistory: () -> Unit, clearStats: () -> Unit = {}, showBubble: () -> Unit = {},
-    startMeeting: (SummaryLanguage) -> Unit, stopMeeting: () -> Unit,
-    processMeeting: (String, SummaryLanguage) -> Unit, selectMeeting: (String) -> Unit,
-    unselectMeeting: () -> Unit, deleteMeeting: (String) -> Unit,
+    startMeeting: (Boolean) -> Unit, stopMeeting: () -> Unit,
+    processMeeting: (String, SummaryLanguage, Boolean) -> Unit, selectMeeting: (String) -> Unit,
+    unselectMeeting: () -> Unit, deleteMeeting: (String) -> Unit, copyMeeting: (String) -> Unit,
     exportMeeting: (String, Boolean) -> Unit,
 ) {
     var meeting by rememberSaveable { mutableStateOf(false) }
     var disclosure by rememberSaveable { mutableStateOf(false) }
+    var summarize by rememberSaveable { mutableStateOf(false) }
     var licenses by rememberSaveable { mutableStateOf(false) }
     var notices by rememberSaveable { mutableStateOf(false) }
     Surface(Modifier.fillMaxSize()) {
@@ -163,7 +166,11 @@ private fun HomeScreen(
             }
             if (meeting) {
                 Text("Jusqu’à 2 heures", style = MaterialTheme.typography.titleLarge)
-                Text("Enregistrement direct sur disque jusqu’à 2 heures, puis transcription et résumé extractif locaux après arrêt. Aucun collage automatique dans une autre application. Accord des participants à votre charge.")
+                Text("Enregistrement direct sur disque jusqu’à 2 heures, puis transcription locale après arrêt, à copier ou exporter. Langue détectée automatiquement (français, anglais, néerlandais…). Les pauses courtes sont regroupées pour garder le contexte des phrases. Aucun collage automatique dans une autre application. Accord des participants à votre charge.")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = summarize, onCheckedChange = { summarize = it }, modifier = Modifier.testTag("meeting-summarize"))
+                    Text("Ajouter un résumé extractif (phrases originales, français ou anglais)")
+                }
                 if (meetingState.busy || meetingState.phase != null) {
                     Text("État : " + when (meetingState.phase) {
                         MeetingPhase.RECORDING -> "enregistrement local en cours"
@@ -180,7 +187,7 @@ private fun HomeScreen(
                     Text(meetingState.message, modifier = Modifier.testTag("meeting-message"))
                     if (meetingState.phase == MeetingPhase.RECORDING) {
                         Button(onClick = stopMeeting, modifier = Modifier.fillMaxWidth().testTag("meeting-stop")) {
-                            Text("Arrêter l’enregistrement et traiter")
+                            Text("Arrêter et transcrire")
                         }
                     } else if (meetingState.phase == MeetingPhase.TRANSCRIBING || meetingState.phase == MeetingPhase.SUMMARIZING) {
                         OutlinedButton(onClick = stopMeeting, modifier = Modifier.fillMaxWidth().testTag("meeting-cancel")) {
@@ -192,13 +199,22 @@ private fun HomeScreen(
                     Text("Réunion sélectionnée : ${session.id.take(8)}", style = MaterialTheme.typography.titleMedium)
                     Text("Phase : ${session.phase} • Durée : ${session.durationMs / 1000} s")
                     if (session.diagnostic.isNotBlank()) Text(session.diagnostic)
-                    if (session.phase in listOf(MeetingPhase.RECORDED, MeetingPhase.INTERRUPTED, MeetingPhase.CANCELLED, MeetingPhase.ERROR)) {
-                        Button(onClick = { processMeeting(session.id, session.language) },
-                            enabled = state.modelsReady && ready.notifications,
-                            modifier = Modifier.fillMaxWidth().testTag("meeting-process")) {
-                            Text("Transcrire et résumer")
+                    if (session.journal.isNotEmpty()) {
+                        Button(onClick = { copyMeeting(session.id) }, modifier = Modifier.fillMaxWidth().testTag("meeting-copy")) {
+                            Text("Copier la transcription (texte brut)")
                         }
                     }
+                    if (session.phase in listOf(MeetingPhase.RECORDED, MeetingPhase.INTERRUPTED, MeetingPhase.CANCELLED,
+                            MeetingPhase.ERROR, MeetingPhase.COMPLETE)) {
+                        OutlinedButton(onClick = { processMeeting(session.id, session.language, summarize) },
+                            enabled = state.modelsReady && ready.notifications,
+                            modifier = Modifier.fillMaxWidth().testTag("meeting-process")) {
+                            // A new run writes a new journal; the previous one stays on disk.
+                            Text(if (session.journal.isEmpty()) "Transcrire" else "Retranscrire (nouveau journal)")
+                        }
+                    }
+                    Text(meetingState.message, modifier = Modifier.testTag("meeting-selected-message"))
+                    meetingState.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     if (meetingState.summary.isNotBlank()) {
                         HorizontalDivider()
                         Text("Résumé extractif", style = MaterialTheme.typography.titleMedium)
@@ -226,12 +242,12 @@ private fun HomeScreen(
                         Text("Retour à la liste")
                     }
                 } else {
-                    Button(onClick = { startMeeting(SummaryLanguage.FRENCH) },
+                    Button(onClick = { startMeeting(summarize) },
                         enabled = !state.preparing && !state.recovering &&
                             state.phase == Phase.OFF && state.modelsReady &&
                             ready.microphone && ready.notifications,
                         modifier = Modifier.fillMaxWidth().testTag("meeting-start")) {
-                        Text("Démarrer une réunion (FR)")
+                        Text("Démarrer un enregistrement")
                     }
                     if (!state.modelsReady) {
                         Text("Préparez d’abord les modèles dans l’onglet Dictée.", color = MaterialTheme.colorScheme.error)

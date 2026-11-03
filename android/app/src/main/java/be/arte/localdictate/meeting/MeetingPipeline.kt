@@ -71,28 +71,65 @@ class MeetingCapturePipeline(
     }
 }
 
-data class MeetingSpeech(val startSample: Long, val samples: FloatArray)
+data class MeetingSpeech(val startSample: Long, val samples: FloatArray, val endSample: Long = startSample + samples.size)
 interface MeetingDecoder : AutoCloseable {
     fun accept(samples: FloatArray): List<MeetingSpeech>
     fun finish(): List<MeetingSpeech>
     fun recognize(samples: FloatArray): String
 }
 
-/** Reads the spool directly, one small block / bounded VAD segment / decoder stream at a time. */
-class MeetingTranscriber {
+/**
+ * Joins VAD segments separated by short pauses into one decode, so a thought interrupted by a pause keeps its
+ * context. Decoded alone, a fragment loses its punctuation and a lone hesitation is often heard as an English
+ * word. The pause audio is dropped (the padded segment margins keep a short silence at each join); the block
+ * spans from its first start to its last end. A segment longer than [maxSamples] stays alone.
+ */
+class SpeechMerger(
+    private val maxGapSamples: Long = 3L * 16_000,
+    private val maxSamples: Int = 20 * 16_000,
+) {
+    init { require(maxGapSamples >= 0 && maxSamples > 0) }
+    private val parts = ArrayList<MeetingSpeech>()
+    private var size = 0
+    fun add(speech: MeetingSpeech): List<MeetingSpeech> {
+        val last = parts.lastOrNull()
+        val gap = if (last == null) 0L else speech.startSample - (last.startSample + last.samples.size)
+        val result = if (last != null && (gap > maxGapSamples || size + speech.samples.size > maxSamples)) flush() else emptyList()
+        parts += speech; size += speech.samples.size
+        return result
+    }
+    fun finish(): List<MeetingSpeech> = flush()
+    private fun flush(): List<MeetingSpeech> {
+        if (parts.isEmpty()) return emptyList()
+        val first = parts.first()
+        val last = parts.last()
+        val samples = if (parts.size == 1) first.samples else FloatArray(size).also { joined ->
+            var offset = 0
+            for (part in parts) { part.samples.copyInto(joined, offset); offset += part.samples.size }
+        }
+        // The decode window is the joined audio; the journal interval is the real span, pauses included.
+        val block = MeetingSpeech(first.startSample, samples, last.startSample + last.samples.size)
+        parts.clear(); size = 0
+        return listOf(block)
+    }
+}
+
+/** Reads the spool directly, one small block / merged VAD segments / decoder stream at a time. */
+class MeetingTranscriber(private val merger: () -> SpeechMerger = { SpeechMerger() }) {
     suspend fun transcribe(audio: File, journal: TranscriptJournal, decoder: MeetingDecoder,
         cancelled: () -> Boolean, progress: (Long) -> Unit = {}) {
         SavedPcm(audio).use { pcm ->
             check(pcm.tornBytes == 0L) { "Explicit recovery required" }
             var readSamples = 0L
             var lastEnd = 0L
+            val blocks = merger()
             fun checkCancelled() { if (cancelled()) throw CancellationException("Meeting cancelled") }
             fun commit(segments: List<MeetingSpeech>) {
                 for (segment in segments) {
                     checkCancelled()
                     val start = segment.startSample
-                    val end = start + segment.samples.size.toLong()
-                    check(segment.samples.isNotEmpty() && segment.samples.size <= 22 * 16_000)
+                    val end = segment.endSample
+                    check(segment.samples.isNotEmpty() && segment.samples.size <= 22 * 16_000 && end >= start + segment.samples.size)
                     check(start >= lastEnd && end <= pcm.samples && end <= readSamples) { "Invalid VAD sample positions" }
                     val text = decoder.recognize(segment.samples).trim()
                     // A decode already in JNI is allowed to finish and commit before cancellation is observed.
@@ -110,11 +147,12 @@ class MeetingTranscriber {
                 currentCoroutineContext().ensureActive(); checkCancelled()
                 val block = pcm.read() ?: break
                 readSamples += block.size
-                commit(decoder.accept(block))
+                commit(decoder.accept(block).flatMap(blocks::add))
                 progress(readSamples * 1000 / 16_000)
             }
             checkCancelled()
-            commit(decoder.finish()) // Includes final partial VAD window, limited to real samples.
+            // Includes final partial VAD window, limited to real samples.
+            commit(decoder.finish().flatMap(blocks::add) + blocks.finish())
             progress(pcm.samples * 1000 / 16_000)
         }
     }

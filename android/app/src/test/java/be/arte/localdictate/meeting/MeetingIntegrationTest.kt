@@ -77,6 +77,21 @@ class MeetingIntegrationTest {
         assertFalse(File(root, session.id).exists())
     }
 
+    @Test fun plainTranscriptHasNoTimestampsAndBreaksParagraphsOnLongPauses() {
+        val repo = MeetingRepository(temporary.newFolder("meetings_text"))
+        val session = repo.newJournal(repo.create(SummaryLanguage.FRENCH))
+        assertEquals("", repo.plainText(session.copy(journal = "")).text)
+        TranscriptJournal.create(repo.journal(session), repo.guard).use { journal ->
+            journal.append(0, 4_000, "On partirait sur des workstations.")
+            journal.append(5_000, 9_000, " The budget is still there. ")
+            journal.append(20_000, 23_000, "We kunnen huren in plaats van kopen.")
+        }
+        val plain = repo.plainText(session)
+        assertTrue(plain.complete)
+        assertEquals("On partirait sur des workstations. The budget is still there.\n\nWe kunnen huren in plaats van kopen.", plain.text)
+        assertThrows(java.io.IOException::class.java) { repo.plainText(session, maxChars = 10) }
+    }
+
     @Test fun meetingControllerSharesMutualExclusionWithDictation() {
         val app = ApplicationProvider.getApplicationContext<DictateApplication>()
         val dictation = app.controller

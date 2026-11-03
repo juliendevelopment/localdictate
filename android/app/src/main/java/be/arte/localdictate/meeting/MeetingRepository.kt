@@ -17,12 +17,14 @@ data class MeetingSession(
     val durationMs: Long = 0, val processedMs: Long = 0, val language: SummaryLanguage = SummaryLanguage.FRENCH,
     val journal: String = "", val diagnostic: String = "", val summary: String = "",
 )
+data class PlainTranscript(val text: String, val complete: Boolean)
 data class TranscriptPage(val segments: List<TranscriptSegment>, val total: Long, val diagnostic: String)
 
 /** UUID-only private namespace, explicit quotas; never evicts a session to make room. IO owner required. */
 class MeetingRepository(val root: File, private val freeSpace: StorageGuard = ReservedSpaceGuard(64L * 1024 * 1024)) {
     companion object {
         const val MAX_SESSIONS = 20
+        const val MAX_PLAIN_TEXT_CHARS = 200_000 // Well under the 1 MB binder limit of a clipboard transaction.
         const val MAX_BYTES = 2L * 1024 * 1024 * 1024
         private val active = setOf(MeetingPhase.CREATED, MeetingPhase.RECORDING, MeetingPhase.TRANSCRIBING, MeetingPhase.SUMMARIZING)
         fun validId(id: String) = runCatching { UUID.fromString(id).toString() == id }.getOrDefault(false)
@@ -111,6 +113,22 @@ class MeetingRepository(val root: File, private val freeSpace: StorageGuard = Re
         } }
         return TranscriptPage(items, scan.segmentCount,
             if (scan.isComplete) "" else "Journal partiel : ${scan.tailIssue}, ${scan.tailBytes} octets non vérifiés. Original conservé, aucune réparation automatique.")
+    }
+    /**
+     * The verified journal as plain text for pasting elsewhere (an LLM, notes): no timestamps, anchors or summary.
+     * Segments are joined with a space; a pause of [paragraphGapMs] or more starts a new paragraph.
+     */
+    fun plainText(session: MeetingSession, paragraphGapMs: Long = 8_000, maxChars: Int = MAX_PLAIN_TEXT_CHARS): PlainTranscript {
+        if (session.journal.isEmpty()) return PlainTranscript("", complete = true)
+        val text = StringBuilder()
+        var lastEnd = -1L
+        val scan = TranscriptJournal.openReader(journal(session)).use { reader -> reader.scan { segment ->
+            if (lastEnd >= 0) text.append(if (segment.startMs - lastEnd >= paragraphGapMs) "\n\n" else " ")
+            text.append(segment.text.trim())
+            lastEnd = segment.endMs
+            if (text.length > maxChars) throw IOException("Transcript too long for the clipboard")
+        } }
+        return PlainTranscript(text.toString(), scan.isComplete)
     }
     fun delete(id: String) {
         val directory = directory(id)

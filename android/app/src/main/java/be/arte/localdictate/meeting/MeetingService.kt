@@ -167,6 +167,11 @@ class MeetingService : Service() {
             vad.close(); vad = null
             engine.close(); engine = null
             if (cancelled || destroyed) throw CancellationException()
+            if (!request.summarize) {
+                persist(checkNotNull(session).copy(phase = MeetingPhase.COMPLETE, processedMs = checkNotNull(session).durationMs,
+                    diagnostic = checkNotNull(session).diagnostic + " Transcription terminée, sans résumé."))
+                return
+            }
             persist(checkNotNull(session).copy(phase = MeetingPhase.SUMMARIZING, processedMs = checkNotNull(session).durationMs))
             notifyProgress("Résumé extractif local, micro fermé")
             val result = LocalExtractiveSummarizer().summarize(repository.journal(checkNotNull(session)), request.language)
