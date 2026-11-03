@@ -13,20 +13,32 @@ interface MeetingRecorder {
 }
 data class CaptureResult(val samples: Long, val diagnostic: String)
 
-/** Capture never waits for disk until overload has already closed the microphone. */
+/**
+ * Capture never waits for disk. The microphone delivers small blocks (often a few milliseconds each); the queue is
+ * bounded by audio duration, not by block count, and the writer commits about one second at a time with a single
+ * sync. v0.3.0–v0.3.1 queued 32 blocks (well under a second) and synced every block: after an hour of a real
+ * meeting one slow sync filled the queue and closed the microphone. Only a disk stall longer than
+ * [maxPendingBytes] of audio (60 s by default) now stops the capture, and accepted audio is still drained.
+ */
 class MeetingCapturePipeline(
     private val recorder: MeetingRecorder,
     private val append: (ByteArray) -> AudioAppendResult,
     private val duration: (Long) -> Unit = {},
-    private val capacity: Int = 32,
+    private val maxPendingBytes: Long = 60L * 32_000,
+    private val commitBytes: Int = 32_000,
     private val maxSamples: Long = 115_200_000L,
 ) {
-    init { require(capacity in 1..64 && maxSamples in 1..115_200_000L) }
+    init {
+        require(maxPendingBytes >= PcmRecording.MAX_APPEND_BYTES && commitBytes in 2..PcmRecording.MAX_APPEND_BYTES &&
+            commitBytes % 2 == 0 && maxSamples in 1..115_200_000L)
+    }
     suspend fun run(): CaptureResult = supervisorScope {
-        val queue = Channel<ByteArray>(capacity)
+        // Unlimited in blocks, bounded in bytes by the producer below.
+        val queue = Channel<ByteArray>(Channel.UNLIMITED)
         val failure = AtomicReference("")
         val written = AtomicLong(0)
         val queued = AtomicLong(0)
+        val pending = AtomicLong(0)
         fun fail(message: String) { failure.compareAndSet("", message); recorder.stop() }
         val producer = launch(Dispatchers.IO) {
             try {
@@ -35,11 +47,10 @@ class MeetingCapturePipeline(
                     val bytes = minOf(raw.size.toLong(), maxSamples * 2 - queued.get()).toInt()
                     if (bytes > 0) {
                         val block = if (bytes == raw.size) raw else raw.copyOf(bytes)
-                        if (!queue.trySend(block).isSuccess) {
-                            fail("File d’écriture saturée : micro fermé, vidage des blocs acceptés.")
-                            runBlocking { queue.send(block) }
-                        }
                         queued.addAndGet(bytes.toLong())
+                        if (pending.addAndGet(bytes.toLong()) > maxPendingBytes)
+                            fail("Écriture disque bloquée plus de ${maxPendingBytes / 32_000} s : micro fermé, son déjà capté conservé.")
+                        queue.trySend(block) // Never fails while open: accepted audio is always drained.
                     }
                     if (queued.get() == maxSamples * 2) {
                         fail("Limite de 2 heures atteinte ; capture arrêtée.")
@@ -50,14 +61,30 @@ class MeetingCapturePipeline(
             finally { recorder.stop(); queue.close() }
         }
         val writer = launch(Dispatchers.IO) {
+            val stage = ByteArray(PcmRecording.MAX_APPEND_BYTES)
+            var staged = 0
+            fun commit() {
+                if (staged == 0) return
+                val result = append(stage.copyOf(staged))
+                written.addAndGet(result.acceptedBytes)
+                pending.addAndGet(-staged.toLong())
+                staged = 0
+                duration(written.get() * 1000 / 32_000)
+                if (result.limitReached) recorder.stop()
+                check(result.rejectedBytes == 0L) { "Unexpected capture budget mismatch" }
+            }
             try {
                 for (block in queue) {
-                    val result = append(block)
-                    written.addAndGet(result.acceptedBytes)
-                    duration(written.get() * 1000 / 32_000)
-                    if (result.limitReached) recorder.stop()
-                    check(result.rejectedBytes == 0L) { "Unexpected capture budget mismatch" }
+                    var offset = 0
+                    while (offset < block.size) {
+                        val count = minOf(block.size - offset, stage.size - staged)
+                        block.copyInto(stage, staged, offset, offset + count)
+                        staged += count; offset += count
+                        if (staged == stage.size) commit()
+                    }
+                    if (staged >= commitBytes) commit()
                 }
+                commit() // Queue closed: the last partial second.
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) {
                 fail("Écriture interrompue : audio synchronisé conservé. Des blocs en attente peuvent manquer ; reprise explicite requise.")

@@ -109,7 +109,8 @@ class MeetingService : Service() {
                         override fun stop() = recorder.stop()
                     }, append = { recording.append(it) }, duration = { ms ->
                         controller.update { it.copy(durationMs = ms) }
-                        if (ms - lastSaved >= 1000) {
+                        // Session metadata costs two syncs; the audio itself is synced about every second.
+                        if (ms - lastSaved >= 10_000) {
                             persist(checkNotNull(session).copy(durationMs = ms)); lastSaved = ms
                         }
                     }).run()
@@ -119,6 +120,8 @@ class MeetingService : Service() {
                 timer.cancel(); timer = null
                 persist(checkNotNull(session).copy(phase = MeetingPhase.RECORDED, durationMs = result.samples * 1000 / 16_000,
                     diagnostic = listOf(result.diagnostic, interruption).filter { it.isNotBlank() }.joinToString(" ").ifBlank { "Audio privé sauvegardé." }))
+                if (!stopRequested && !destroyed) alertStopped(listOf(result.diagnostic, interruption).filter { it.isNotBlank() }
+                    .joinToString(" ").ifBlank { "Enregistrement arrêté." })
                 if (!processAfterStop || destroyed || result.diagnostic.isNotBlank() || interruption.isNotBlank()) return
                 // Capture has fully drained and closed before the microphone FGS type is removed.
                 withContext(Dispatchers.Main) { promote(recording = false) }
@@ -201,6 +204,16 @@ class MeetingService : Service() {
             else ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
         startForeground(NOTIFICATION, notification(if (recording) "Enregistrement réunion" else "Traitement audio local"), type)
     }
+    /** A meeting is not watched: a capture that stops without the user's stop must be noticed (sound/vibration). */
+    private fun alertStopped(reason: String) = runCatching {
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(NotificationChannel(ALERT_CHANNEL, "Réunion arrêtée", NotificationManager.IMPORTANCE_HIGH))
+        val open = PendingIntent.getActivity(this, 22, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+        manager.notify(ALERT_NOTIFICATION, Notification.Builder(this, ALERT_CHANNEL).setSmallIcon(R.drawable.ic_launcher)
+            .setContentTitle("Enregistrement de réunion arrêté").setContentText(reason)
+            .setStyle(Notification.BigTextStyle().bigText("$reason Le son capté jusqu’ici est conservé ; relancez un enregistrement pour la suite."))
+            .setContentIntent(open).setAutoCancel(true).build())
+    }
     private fun notifyProgress(message: String) = getSystemService(NotificationManager::class.java).notify(NOTIFICATION, notification(message))
     private fun notification(message: String): Notification {
         val open = PendingIntent.getActivity(this, 20, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
@@ -229,6 +242,8 @@ class MeetingService : Service() {
         const val STOP = "be.arte.localdictate.MEETING_STOP"
         const val CHANNEL = "meeting"
         const val NOTIFICATION = 20
+        const val ALERT_CHANNEL = "meeting-alerts"
+        const val ALERT_NOTIFICATION = 23
         const val PROCESS_TIMEOUT_MS = 6L * 60 * 60 * 1000
     }
 }
