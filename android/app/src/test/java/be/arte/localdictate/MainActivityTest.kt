@@ -59,7 +59,7 @@ class MainActivityTest {
     }
     @Test fun eachSavedMeetingCanBeDeletedAfterConfirmation() {
         val meetings = (compose.activity.application as DictateApplication).meetings
-        val session = meetings.repository.create(be.arte.localdictate.meeting.SummaryLanguage.FRENCH)
+        val session = meetings.repository.create()
             .copy(phase = be.arte.localdictate.meeting.MeetingPhase.RECORDED)
         meetings.repository.save(session)
         kotlinx.coroutines.runBlocking { meetings.refresh() }

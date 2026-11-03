@@ -11,11 +11,11 @@ import java.util.Properties
 import java.util.UUID
 
 // Active states left on disk mean interruption on the next process launch, never an instruction to start.
+/** SUMMARIZING is only read from sessions saved by v0.3.0–v0.3.1, which had an extractive summary. */
 enum class MeetingPhase { CREATED, RECORDING, RECORDED, TRANSCRIBING, SUMMARIZING, COMPLETE, INTERRUPTED, CANCELLED, ERROR }
 data class MeetingSession(
     val id: String, val createdMs: Long, val phase: MeetingPhase = MeetingPhase.CREATED,
-    val durationMs: Long = 0, val processedMs: Long = 0, val language: SummaryLanguage = SummaryLanguage.FRENCH,
-    val journal: String = "", val diagnostic: String = "", val summary: String = "",
+    val durationMs: Long = 0, val processedMs: Long = 0, val journal: String = "", val diagnostic: String = "",
 )
 data class PlainTranscript(val text: String, val complete: Boolean)
 data class TranscriptPage(val segments: List<TranscriptSegment>, val total: Long, val diagnostic: String)
@@ -42,10 +42,6 @@ class MeetingRepository(val root: File, private val freeSpace: StorageGuard = Re
         require(session.journal.matches(Regex("transcript-[a-f0-9-]{36}\\.dat")))
         return File(directory(session.id), session.journal)
     }
-    fun summary(session: MeetingSession): File {
-        require(session.summary.matches(Regex("summary-[a-f0-9-]{36}\\.md")))
-        return File(directory(session.id), session.summary)
-    }
     private fun usedBytes(): Long = root.walkTopDown().onEnter { !Files.isSymbolicLink(it.toPath()) }
         .filter { Files.isRegularFile(it.toPath(), NOFOLLOW_LINKS) }.sumOf { it.length().coerceAtMost(MAX_BYTES + 1) }
     val guard = StorageGuard { file, bytes ->
@@ -54,12 +50,12 @@ class MeetingRepository(val root: File, private val freeSpace: StorageGuard = Re
         if (used > MAX_BYTES || bytes > MAX_BYTES - used) throw IOException("Meeting quota exhausted")
         freeSpace.requireSpace(file, bytes)
     }
-    fun create(language: SummaryLanguage): MeetingSession {
+    fun create(): MeetingSession {
         if (list().size >= MAX_SESSIONS) throw IOException("Session limit reached")
         guard.requireSpace(File(root, "reservation"), PcmRecording.MAX_PCM_BYTES + 1024 * 1024)
         val id = UUID.randomUUID().toString()
         check(File(root, id).mkdir())
-        val session = MeetingSession(id, System.currentTimeMillis(), language = language)
+        val session = MeetingSession(id, System.currentTimeMillis())
         save(session)
         return session
     }
@@ -67,9 +63,8 @@ class MeetingRepository(val root: File, private val freeSpace: StorageGuard = Re
         val p = Properties().apply {
             setProperty("id", session.id); setProperty("created", session.createdMs.toString())
             setProperty("phase", session.phase.name); setProperty("duration", session.durationMs.toString())
-            setProperty("processed", session.processedMs.toString()); setProperty("language", session.language.name)
+            setProperty("processed", session.processedMs.toString())
             setProperty("journal", session.journal); setProperty("diagnostic", session.diagnostic.take(2000))
-            setProperty("summary", session.summary)
         }
         atomicFile(File(directory(session.id), "session.properties")) { out -> p.store(out, null) }
     }
@@ -81,8 +76,8 @@ class MeetingRepository(val root: File, private val freeSpace: StorageGuard = Re
         return MeetingSession(id, p.getProperty("created").toLong(), MeetingPhase.valueOf(p.getProperty("phase")),
             p.getProperty("duration").toLong().also { require(it in 0..PcmRecording.MAX_DURATION_MS) },
             p.getProperty("processed").toLong().also { require(it in 0..PcmRecording.MAX_DURATION_MS) },
-            SummaryLanguage.valueOf(p.getProperty("language")), p.getProperty("journal", ""),
-            p.getProperty("diagnostic", ""), p.getProperty("summary", ""))
+            // Older "language"/"summary" properties are ignored; their files are removed with the meeting.
+            p.getProperty("journal", ""), p.getProperty("diagnostic", ""))
     }
     fun list(activeId: String? = null): List<MeetingSession> = root.listFiles().orEmpty()
         .filter { validId(it.name) && Files.isDirectory(it.toPath(), NOFOLLOW_LINKS) }
@@ -92,7 +87,7 @@ class MeetingRepository(val root: File, private val freeSpace: StorageGuard = Re
             diagnostic = it.diagnostic + " Session interrompue : aucun redémarrage automatique. Le dernier bloc non synchronisé peut manquer.") else it }
         .sortedByDescending { it.createdMs }
     fun newJournal(session: MeetingSession): MeetingSession = session.copy(
-        journal = "transcript-${UUID.randomUUID()}.dat", summary = "", processedMs = 0)
+        journal = "transcript-${UUID.randomUUID()}.dat", processedMs = 0)
     /** User authorized recovery only. Preserve the complete original before the sole destructive repair. */
     fun recoverAudio(id: String): String {
         val file = audio(id)
@@ -115,20 +110,26 @@ class MeetingRepository(val root: File, private val freeSpace: StorageGuard = Re
             if (scan.isComplete) "" else "Journal partiel : ${scan.tailIssue}, ${scan.tailBytes} octets non vérifiés. Original conservé, aucune réparation automatique.")
     }
     /**
-     * The verified journal as plain text for pasting elsewhere (an LLM, notes): no timestamps, anchors or summary.
+     * The verified journal as plain text for pasting elsewhere (an LLM, notes): no timestamps or anchors.
      * Segments are joined with a space; a pause of [paragraphGapMs] or more starts a new paragraph.
+     * Streams pieces to [write]; returns false when only the verified prefix of a damaged journal was written.
      */
-    fun plainText(session: MeetingSession, paragraphGapMs: Long = 8_000, maxChars: Int = MAX_PLAIN_TEXT_CHARS): PlainTranscript {
-        if (session.journal.isEmpty()) return PlainTranscript("", complete = true)
-        val text = StringBuilder()
+    fun writePlainText(session: MeetingSession, paragraphGapMs: Long = 8_000, write: (String) -> Unit): Boolean {
+        if (session.journal.isEmpty()) return true
         var lastEnd = -1L
-        val scan = TranscriptJournal.openReader(journal(session)).use { reader -> reader.scan { segment ->
-            if (lastEnd >= 0) text.append(if (segment.startMs - lastEnd >= paragraphGapMs) "\n\n" else " ")
-            text.append(segment.text.trim())
+        return TranscriptJournal.openReader(journal(session)).use { reader -> reader.scan { segment ->
+            if (lastEnd >= 0) write(if (segment.startMs - lastEnd >= paragraphGapMs) "\n\n" else " ")
+            write(segment.text.trim())
             lastEnd = segment.endMs
+        } }.isComplete
+    }
+    fun plainText(session: MeetingSession, paragraphGapMs: Long = 8_000, maxChars: Int = MAX_PLAIN_TEXT_CHARS): PlainTranscript {
+        val text = StringBuilder()
+        val complete = writePlainText(session, paragraphGapMs) { piece ->
+            text.append(piece)
             if (text.length > maxChars) throw IOException("Transcript too long for the clipboard")
-        } }
-        return PlainTranscript(text.toString(), scan.isComplete)
+        }
+        return PlainTranscript(text.toString(), complete)
     }
     fun delete(id: String) {
         val directory = directory(id)

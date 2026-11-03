@@ -157,17 +157,3 @@ class MeetingTranscriber(private val merger: () -> SpeechMerger = { SpeechMerger
         }
     }
 }
-
-fun writeSummary(summary: ExtractiveSummary, out: Appendable) {
-    out.append("# Résumé extractif local\n\nLangue de sélection : ${summary.language.name}. Aucune traduction.\n")
-    out.append("Passages originaux, sans reformulation ni classification des décisions/actions. Les temps sont ceux des segments, pas des mots.\n\n")
-    for (sentence in summary.sentences) {
-        out.append("- [${sentence.segmentStartMs / 1000}–${sentence.segmentEndMs / 1000} s, ${sentence.sourceAnchor}]")
-            .append("(#${sentence.sourceAnchor}) : ").append(sentence.text).append('\n')
-    }
-    out.append("\n${summary.source.segmentCount} segments, ${summary.sentencesExamined} phrases examinées ; ")
-        .append("${summary.omittedEligibleSentences} phrases admissibles omises ; ${summary.oversizedSentences} phrases trop longues exclues.\n")
-    for (part in summary.coverage) out.append("Partie ${part.index + 1} : ${part.startMs / 1000}–${part.endMs / 1000} s, ")
-        .append("${part.sourceSegments} segments, ${part.selectedSentences} extraits / ${part.eligibleSentences} phrases admissibles.\n")
-    out.append("Parties avec texte sans extrait : ${summary.uncoveredPartIndexes.map { it + 1 }}. Consultez la transcription complète pour le contexte.\n")
-}

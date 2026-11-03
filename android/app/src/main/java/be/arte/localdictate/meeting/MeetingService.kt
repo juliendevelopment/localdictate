@@ -15,7 +15,6 @@ import be.arte.localdictate.asr.LocalRecognizer
 import be.arte.localdictate.asr.SileroSegmenter
 import be.arte.localdictate.audio.MicrophoneCapture
 import kotlinx.coroutines.*
-import java.util.UUID
 
 /** No boot receiver, no sticky restart, no capture in onCreate. One explicit launch token, one job. */
 class MeetingService : Service() {
@@ -85,13 +84,13 @@ class MeetingService : Service() {
         fun persist(next: MeetingSession) {
             repository.save(next); session = next
             controller.update { it.copy(selected = next, phase = next.phase, durationMs = next.durationMs,
-                processedMs = next.processedMs, message = next.diagnostic, page = null, summary = "") }
+                processedMs = next.processedMs, message = next.diagnostic, page = null) }
         }
         try {
             check(!destroyed)
             if (request.id == null) {
                 wake(PcmRecording.MAX_DURATION_MS + 30_000)
-                persist(repository.create(request.language))
+                persist(repository.create())
                 val recorder = MicrophoneCapture(applicationContext)
                 microphone = recorder
                 if (stopRequested || destroyed) recorder.stop()
@@ -124,7 +123,7 @@ class MeetingService : Service() {
                 // Capture has fully drained and closed before the microphone FGS type is removed.
                 withContext(Dispatchers.Main) { promote(recording = false) }
             } else {
-                persist(repository.read(request.id).copy(language = request.language))
+                persist(repository.read(request.id))
                 val diagnostic = repository.recoverAudio(request.id) // Explicit UI action, original preserved before repair.
                 val actualMs = SavedPcm(repository.audio(request.id)).use { it.samples * 1000 / 16_000 }
                 persist(checkNotNull(session).copy(phase = MeetingPhase.RECORDED, durationMs = actualMs,
@@ -163,26 +162,12 @@ class MeetingService : Service() {
                     }
                 })
             }
-            // Release expensive ASR handles before the two streaming summary passes.
+            // Release the expensive ASR handles as soon as decoding ends.
             vad.close(); vad = null
             engine.close(); engine = null
             if (cancelled || destroyed) throw CancellationException()
-            if (!request.summarize) {
-                persist(checkNotNull(session).copy(phase = MeetingPhase.COMPLETE, processedMs = checkNotNull(session).durationMs,
-                    diagnostic = checkNotNull(session).diagnostic + " Transcription terminée, sans résumé."))
-                return
-            }
-            persist(checkNotNull(session).copy(phase = MeetingPhase.SUMMARIZING, processedMs = checkNotNull(session).durationMs))
-            notifyProgress("Résumé extractif local, micro fermé")
-            val result = LocalExtractiveSummarizer().summarize(repository.journal(checkNotNull(session)), request.language)
-            if (cancelled || destroyed) throw CancellationException()
-            val summaryName = "summary-${UUID.randomUUID()}.md"
-            repository.atomicFile(java.io.File(repository.directory(checkNotNull(session).id), summaryName)) { out ->
-                val writer = out.bufferedWriter(Charsets.UTF_8)
-                writeSummary(result, writer); writer.flush()
-            }
-            persist(checkNotNull(session).copy(phase = MeetingPhase.COMPLETE, summary = summaryName,
-                diagnostic = checkNotNull(session).diagnostic + " Transcription terminée. Résumé extractif : passages sources, omissions indiquées, aucune décision inventée."))
+            persist(checkNotNull(session).copy(phase = MeetingPhase.COMPLETE, processedMs = checkNotNull(session).durationMs,
+                diagnostic = checkNotNull(session).diagnostic + " Transcription terminée."))
         } catch (_: CancellationException) {
             session?.let { runCatching { persist(it.copy(phase = MeetingPhase.CANCELLED,
                 diagnostic = it.diagnostic + " Traitement interrompu/annulé. Audio et segments reconnus conservés. " + interruption)) } }
@@ -192,7 +177,7 @@ class MeetingService : Service() {
         } catch (_: Exception) {
             session?.let { runCatching { persist(it.copy(phase = MeetingPhase.ERROR,
                 diagnostic = it.diagnostic + " Échec du traitement ou stockage. Audio et transcription conservés ; vérifiez l’espace avant une reprise explicite.")) } }
-            controller.update { it.copy(error = "Réunion interrompue : fichiers conservés. Si le résumé a échoué, la transcription reste accessible.") }
+            controller.update { it.copy(error = "Réunion interrompue : audio et texte déjà transcrit conservés.") }
         } finally {
             timer?.cancel()
             microphone?.stop(); microphone = null

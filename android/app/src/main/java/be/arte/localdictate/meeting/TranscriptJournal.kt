@@ -132,7 +132,7 @@ class TranscriptJournal private constructor(
             }
         }
 
-        /** Reader holds a shared lock across every scan, including the summary's two passes. */
+        /** Reader holds a shared lock across every scan. */
         fun openReader(file: File): TranscriptReader {
             val handle = LockedMeetingFile.existing(file, readOnly = true)
             try {

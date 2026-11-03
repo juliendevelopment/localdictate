@@ -17,10 +17,10 @@ import java.util.UUID
 data class MeetingState(
     val busy: Boolean = false, val phase: MeetingPhase? = null,
     val sessions: List<MeetingSession> = emptyList(), val selected: MeetingSession? = null,
-    val page: TranscriptPage? = null, val journals: List<String> = emptyList(), val summary: String = "", val durationMs: Long = 0,
+    val page: TranscriptPage? = null, val journals: List<String> = emptyList(), val durationMs: Long = 0,
     val processedMs: Long = 0, val message: String = "Aucun enregistrement automatique.", val error: String? = null,
 )
-data class MeetingLaunch(val token: String, val id: String?, val language: SummaryLanguage, val summarize: Boolean = false)
+data class MeetingLaunch(val token: String, val id: String?)
 
 /** Application-scoped state. Only reserve() from an explicit resumed Activity can authorize a service. */
 class MeetingController(private val app: Application, private val dictation: DictationController) {
@@ -44,9 +44,9 @@ class MeetingController(private val app: Application, private val dictation: Dic
         dictation.update { it.copy(meetingBusy = false) }
         update { it.copy(busy = false, phase = null) }
     }
-    @Synchronized fun reserve(id: String?, language: SummaryLanguage, summarize: Boolean = false): MeetingLaunch? {
+    @Synchronized fun reserve(id: String?): MeetingLaunch? {
         if (!dictation.models.isReady() || !acquire()) return null
-        return MeetingLaunch(UUID.randomUUID().toString(), id, language, summarize).also { pending = it }
+        return MeetingLaunch(UUID.randomUUID().toString(), id).also { pending = it }
     }
     @Synchronized fun consume(token: String?): MeetingLaunch? {
         val request = pending ?: return null
@@ -70,22 +70,17 @@ class MeetingController(private val app: Application, private val dictation: Dic
     }
     fun select(id: String, firstSegment: Long = 1, journalName: String? = null) = operation {
         val stored = repository.list().first { it.id == id }
-        val session = if (journalName != null && journalName != stored.journal) stored.copy(journal = journalName, summary = "") else stored
+        val session = if (journalName != null && journalName != stored.journal) stored.copy(journal = journalName) else stored
         val journals = repository.directory(id).listFiles().orEmpty().map { it.name }
             .filter { it.matches(Regex("transcript-[a-f0-9-]{36}\\.dat")) }.sorted()
         val page = runCatching { repository.page(session, firstSegment) }.getOrElse {
             TranscriptPage(emptyList(), 0, "Journal illisible : original conservé. Une nouvelle transcription crée un autre journal.")
         }
-        val summary = if (session.summary.isNotEmpty()) runCatching {
-            val file = repository.summary(session)
-            check(file.length() <= 32_768)
-            file.readText(Charsets.UTF_8)
-        }.getOrDefault("Résumé illisible ; audio et journal conservés.") else ""
-        update { it.copy(selected = session, page = page, journals = journals, summary = summary, durationMs = session.durationMs, processedMs = session.processedMs) }
+        update { it.copy(selected = session, page = page, journals = journals, durationMs = session.durationMs, processedMs = session.processedMs) }
     }
     fun delete(id: String) = operation {
         repository.delete(id)
-        update { it.copy(selected = null, page = null, summary = "", message = "Réunion supprimée explicitement.") }
+        update { it.copy(selected = null, page = null, message = "Réunion supprimée explicitement.") }
         refresh()
     }
     /** Plain transcript of the current journal, copied as sensitive content; the user pastes it. */

@@ -14,10 +14,6 @@ class SessionBudgetTest {
         assertTrue(SessionMode.DICTATION.allowsCursorInsertion)
         assertFalse(SessionMode.MEETING.allowsCursorInsertion)
     }
-    @Test fun onlyMeetingRequestsSummary() {
-        assertFalse(SessionMode.DICTATION.requestsSummary)
-        assertTrue(SessionMode.MEETING.requestsSummary)
-    }
     @Test fun initialBudgetMatchesTheMode() {
         for (mode in SessionMode.entries) {
             val budget = SessionBudget(mode)

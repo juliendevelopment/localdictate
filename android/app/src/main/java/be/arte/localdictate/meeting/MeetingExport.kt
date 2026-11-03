@@ -7,6 +7,7 @@ import java.util.UUID
 
 /** Only this bounded cache subtree is exposed by FileProvider. Never exposes a session/model path. */
 class MeetingExport(private val cache: File, private val repository: MeetingRepository) {
+    private fun writePlain(session: MeetingSession, write: (String) -> Unit) = repository.writePlainText(session, write = write)
     companion object { const val MAX_EXPORT_BYTES = 300L * 1024 * 1024 }
     fun create(session: MeetingSession, wav: Boolean): File {
         check(cache.isDirectory || cache.mkdirs())
@@ -21,7 +22,7 @@ class MeetingExport(private val cache: File, private val repository: MeetingRepo
                 throw IOException("Export quota exhausted")
             ReservedSpaceGuard(64L * 1024 * 1024).requireSpace(file, bytes)
         }
-        val destination = File(cache, "reunion-${UUID.randomUUID()}.${if (wav) "wav" else "md"}")
+        val destination = File(cache, "${if (wav) "audio" else "transcription"}-${UUID.randomUUID()}.${if (wav) "wav" else "md"}")
         try {
             if (wav) {
                 SavedPcm(repository.audio(session.id)).use { check(it.tornBytes == 0L) { "Explicit recovery required" } }
@@ -31,21 +32,19 @@ class MeetingExport(private val cache: File, private val repository: MeetingRepo
                 guard.requireSpace(destination, 32_768)
                 FileOutputStream(destination).use { stream ->
                     val writer = stream.bufferedWriter(Charsets.UTF_8)
-                    writer.append("# Réunion locale\n\nÉtat : ${session.phase}. ${session.diagnostic}\n\n")
-                    if (session.summary.isNotEmpty()) repository.summary(session).bufferedReader().use { reader ->
-                        val buffer = CharArray(4096)
-                        while (true) { val n = reader.read(buffer); if (n < 0) break; writer.write(buffer, 0, n) }
+                    val created = java.time.Instant.ofEpochMilli(session.createdMs).atZone(java.time.ZoneId.systemDefault())
+                        .format(java.time.format.DateTimeFormatter.ofPattern("d MMMM yyyy HH:mm", java.util.Locale.FRENCH))
+                    val minutes = (session.durationMs + 59_999) / 60_000
+                    // Ready to hand to an LLM: a short header, then the plain transcript in paragraphs.
+                    writer.append("# Notes orales du $created\n\n")
+                        .append("Durée : environ $minutes min. Transcription locale automatique : elle peut contenir des erreurs de reconnaissance.\n\n")
+                    val complete = writePlain(session) { piece ->
+                        guard.requireSpace(destination, piece.length * 4L + 512)
+                        writer.append(piece)
+                        writer.flush() // Bound both buffering and quota accounting on long journals.
                     }
-                    writer.append("\n# Transcription complète du journal courant\n\n")
-                    if (session.journal.isNotEmpty()) TranscriptJournal.openReader(repository.journal(session)).use { reader ->
-                        val report = reader.scan { segment ->
-                            guard.requireSpace(destination, segment.text.length * 4L + 512)
-                            writer.append("<a id=\"${segment.anchor}\"></a>\n[${segment.startMs / 1000}–${segment.endMs / 1000} s] ")
-                                .append(segment.text).append("\n\n")
-                            writer.flush() // Bound both buffering and quota accounting on long journals.
-                        }
-                        if (!report.isComplete) writer.append("\nJOURNAL PARTIEL : ${report.tailIssue}, ${report.tailBytes} octets non vérifiés. Préfixe vérifié seulement ; original privé conservé.\n")
-                    }
+                    writer.append("\n")
+                    if (!complete) writer.append("\nTRANSCRIPTION PARTIELLE : seul le début vérifié du journal est exporté ; l’original privé est conservé.\n")
                     writer.flush(); stream.fd.sync()
                 }
             }

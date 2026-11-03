@@ -56,8 +56,7 @@ class MeetingIntegrationTest {
         val repo = MeetingRepository(root)
         assertTrue(repo.list().isEmpty())
 
-        val session = repo.create(SummaryLanguage.FRENCH)
-        assertEquals(SummaryLanguage.FRENCH, session.language)
+        val session = repo.create()
         assertEquals(MeetingPhase.CREATED, session.phase)
         assertTrue(MeetingRepository.validId(session.id))
 
@@ -79,7 +78,7 @@ class MeetingIntegrationTest {
 
     @Test fun plainTranscriptHasNoTimestampsAndBreaksParagraphsOnLongPauses() {
         val repo = MeetingRepository(temporary.newFolder("meetings_text"))
-        val session = repo.newJournal(repo.create(SummaryLanguage.FRENCH))
+        val session = repo.newJournal(repo.create())
         assertEquals("", repo.plainText(session.copy(journal = "")).text)
         TranscriptJournal.create(repo.journal(session), repo.guard).use { journal ->
             journal.append(0, 4_000, "On partirait sur des workstations.")
@@ -92,6 +91,18 @@ class MeetingIntegrationTest {
         assertThrows(java.io.IOException::class.java) { repo.plainText(session, maxChars = 10) }
     }
 
+    @Test fun sessionsSavedWithTheRemovedSummaryStillOpen() {
+        val repo = MeetingRepository(temporary.newFolder("meetings_legacy"))
+        val session = repo.create()
+        File(repo.directory(session.id), "session.properties").writeText(
+            "id=${session.id}\ncreated=1\nphase=SUMMARIZING\nduration=1000\nprocessed=1000\nlanguage=FRENCH\n" +
+                "journal=\ndiagnostic=v0.3.1\nsummary=summary-${java.util.UUID.randomUUID()}.md\n")
+        assertEquals(MeetingPhase.SUMMARIZING, repo.read(session.id).phase)
+        assertEquals(MeetingPhase.INTERRUPTED, repo.list().single().phase)
+        repo.delete(session.id)
+        assertTrue(repo.list().isEmpty())
+    }
+
     @Test fun meetingControllerSharesMutualExclusionWithDictation() {
         val app = ApplicationProvider.getApplicationContext<DictateApplication>()
         val dictation = app.controller
@@ -100,13 +111,13 @@ class MeetingIntegrationTest {
         assertFalse(dictation.state.value.meetingBusy)
 
         // When models are not ready, reserve returns null
-        assertNull(meeting.reserve(null, SummaryLanguage.FRENCH))
+        assertNull(meeting.reserve(null))
 
         // When dictation is armed, meeting reserve is refused
         dictation.update { it.copy(modelsReady = true) }
         // Emulate models ready in ModelManager if possible, or test gate directly:
         assertTrue(dictation.gate.acquire(Use.ARMED))
-        assertNull(meeting.reserve(null, SummaryLanguage.FRENCH))
+        assertNull(meeting.reserve(null))
         dictation.gate.release(Use.ARMED)
 
         // Acquire gate for meeting manually to check dictation is blocked
@@ -155,7 +166,7 @@ class MeetingIntegrationTest {
         val root = temporary.newFolder("meetings_export")
         val cache = temporary.newFolder("cache")
         val repo = MeetingRepository(root)
-        val session = repo.create(SummaryLanguage.FRENCH)
+        val session = repo.create()
         val guard = StorageGuard { _, _ -> }
 
         // Create synthetic audio and journal
@@ -167,14 +178,9 @@ class MeetingIntegrationTest {
         TranscriptJournal.create(journalFile, guard).use { j ->
             j.append(0, 1000, "Bonjour bienvenue à la réunion.")
         }
-        val summaryName = "summary-${java.util.UUID.randomUUID()}.md"
-        val summaryFile = File(repo.directory(session.id), summaryName)
-        summaryFile.writeText("# Résumé\n- Point important abordé\n", Charsets.UTF_8)
-
         val updated = session.copy(
             phase = MeetingPhase.COMPLETE,
             journal = journalName,
-            summary = summaryName,
             durationMs = 50,
             diagnostic = "Réunion terminée",
         )
@@ -182,11 +188,11 @@ class MeetingIntegrationTest {
 
         val export = MeetingExport(cache, repo)
         val md = export.create(updated, wav = false)
-        assertTrue(md.exists())
-        assertTrue(md.length() > 0)
         val mdText = md.readText(Charsets.UTF_8)
-        assertTrue(mdText.contains("Bonjour bienvenue à la réunion."))
-        assertTrue(mdText.contains("Point important abordé"))
+        assertTrue(mdText.startsWith("# Notes orales du "))
+        assertTrue(mdText.contains("\n\nBonjour bienvenue à la réunion.\n"))
+        assertFalse(mdText.contains("Résumé"))
+        assertFalse(mdText.contains("segment-")) // No anchors or timestamps for the LLM.
 
         val wav = export.create(updated, wav = true)
         assertTrue(wav.exists())

@@ -4,10 +4,9 @@ package be.arte.localdictate.session
 enum class SessionMode(
     val maxDurationMs: Long,
     val allowsCursorInsertion: Boolean,
-    val requestsSummary: Boolean,
 ) {
-    DICTATION(15L * 60L * 1_000L, true, false),
-    MEETING(2L * 60L * 60L * 1_000L, false, true),
+    DICTATION(15L * 60L * 1_000L, true),
+    MEETING(2L * 60L * 60L * 1_000L, false),
 }
 
 class SessionBudget(private val mode: SessionMode) {

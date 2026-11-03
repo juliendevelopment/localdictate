@@ -19,7 +19,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.selected
@@ -78,7 +77,7 @@ class MainActivity : ComponentActivity() {
                     stopMeeting = ::stopMeeting,
                     processMeeting = ::processMeeting,
                     selectMeeting = model.meetings::select,
-                    unselectMeeting = { model.meetings.update { it.copy(selected = null, page = null, summary = "") } },
+                    unselectMeeting = { model.meetings.update { it.copy(selected = null, page = null) } },
                     deleteMeeting = model.meetings::delete,
                     copyMeeting = model.meetings::copyTranscript,
                     exportMeeting = { id, wav -> model.meetings.export(id, wav) { startActivity(it) } })
@@ -110,10 +109,10 @@ class MainActivity : ComponentActivity() {
         try { startForegroundService(Intent(this, DictationService::class.java).setAction(DictationService.ARM)) }
         catch (_: Exception) { controller.armFailed() }
     }
-    private fun startMeeting(summarize: Boolean) {
+    private fun startMeeting() {
         refreshPermissions()
         if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) || !readiness.microphone || !readiness.notifications) return
-        val launch = meetings.reserve(id = null, language = SummaryLanguage.FRENCH, summarize = summarize) ?: return
+        val launch = meetings.reserve(id = null) ?: return
         try {
             startForegroundService(Intent(this, MeetingService::class.java).apply {
                 action = MeetingService.START
@@ -123,10 +122,10 @@ class MainActivity : ComponentActivity() {
             meetings.launchFailed(launch.token)
         }
     }
-    private fun processMeeting(sessionId: String, language: SummaryLanguage, summarize: Boolean) {
+    private fun processMeeting(sessionId: String) {
         refreshPermissions()
         if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) || !readiness.notifications) return
-        val launch = meetings.reserve(id = sessionId, language = language, summarize = summarize) ?: return
+        val launch = meetings.reserve(id = sessionId) ?: return
         try {
             startForegroundService(Intent(this, MeetingService::class.java).apply {
                 action = MeetingService.START
@@ -147,14 +146,13 @@ private fun HomeScreen(
     microphone: () -> Unit, notifications: () -> Unit, overlay: () -> Unit, accessibility: () -> Unit,
     arm: () -> Unit, stop: () -> Unit, disarm: () -> Unit, copy: () -> Unit, clear: () -> Unit,
     copyText: (String) -> Unit, clearHistory: () -> Unit, clearStats: () -> Unit = {}, showBubble: () -> Unit = {},
-    startMeeting: (Boolean) -> Unit, stopMeeting: () -> Unit,
-    processMeeting: (String, SummaryLanguage, Boolean) -> Unit, selectMeeting: (String) -> Unit,
+    startMeeting: () -> Unit, stopMeeting: () -> Unit,
+    processMeeting: (String) -> Unit, selectMeeting: (String) -> Unit,
     unselectMeeting: () -> Unit, deleteMeeting: (String) -> Unit, copyMeeting: (String) -> Unit,
     exportMeeting: (String, Boolean) -> Unit,
 ) {
     var meeting by rememberSaveable { mutableStateOf(false) }
     var disclosure by rememberSaveable { mutableStateOf(false) }
-    var summarize by rememberSaveable { mutableStateOf(false) }
     var deleting by rememberSaveable { mutableStateOf<String?>(null) }
     var licenses by rememberSaveable { mutableStateOf(false) }
     var notices by rememberSaveable { mutableStateOf(false) }
@@ -169,17 +167,12 @@ private fun HomeScreen(
             }
             if (meeting) {
                 Text("Jusqu’à 2 heures", style = MaterialTheme.typography.titleLarge)
-                Text("Enregistrement direct sur disque jusqu’à 2 heures, puis transcription locale après arrêt, à copier ou exporter. Langue détectée automatiquement (français, anglais, néerlandais…). Les pauses courtes sont regroupées pour garder le contexte des phrases. Aucun collage automatique dans une autre application. Accord des participants à votre charge.")
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = summarize, onCheckedChange = { summarize = it }, modifier = Modifier.testTag("meeting-summarize"))
-                    Text("Ajouter un résumé extractif (phrases originales, français ou anglais)")
-                }
+                Text("Enregistrement direct sur disque jusqu’à 2 heures, puis transcription locale après arrêt, à copier ou exporter en Markdown pour la donner à l’outil de votre choix (un LLM pour le résumé, par exemple). Langue détectée automatiquement (français, anglais, néerlandais…). Les pauses courtes sont regroupées pour garder le contexte des phrases. Aucun collage automatique dans une autre application. Accord des participants à votre charge.")
                 if (meetingState.busy || meetingState.phase != null) {
                     Text("État : " + when (meetingState.phase) {
                         MeetingPhase.RECORDING -> "enregistrement local en cours"
                         MeetingPhase.RECORDED -> "audio sauvegardé, prêt pour traitement"
                         MeetingPhase.TRANSCRIBING -> "transcription locale (${meetingState.processedMs / 1000} s / ${meetingState.durationMs / 1000} s)"
-                        MeetingPhase.SUMMARIZING -> "résumé extractif local"
                         MeetingPhase.COMPLETE -> "terminé"
                         MeetingPhase.INTERRUPTED -> "interrompu"
                         MeetingPhase.CANCELLED -> "annulé"
@@ -192,7 +185,7 @@ private fun HomeScreen(
                         Button(onClick = stopMeeting, modifier = Modifier.fillMaxWidth().testTag("meeting-stop")) {
                             Text("Arrêter et transcrire")
                         }
-                    } else if (meetingState.phase == MeetingPhase.TRANSCRIBING || meetingState.phase == MeetingPhase.SUMMARIZING) {
+                    } else if (meetingState.phase == MeetingPhase.TRANSCRIBING) {
                         OutlinedButton(onClick = stopMeeting, modifier = Modifier.fillMaxWidth().testTag("meeting-cancel")) {
                             Text("Annuler le traitement")
                         }
@@ -209,7 +202,7 @@ private fun HomeScreen(
                     }
                     if (session.phase in listOf(MeetingPhase.RECORDED, MeetingPhase.INTERRUPTED, MeetingPhase.CANCELLED,
                             MeetingPhase.ERROR, MeetingPhase.COMPLETE)) {
-                        OutlinedButton(onClick = { processMeeting(session.id, session.language, summarize) },
+                        OutlinedButton(onClick = { processMeeting(session.id) },
                             enabled = state.modelsReady && ready.notifications,
                             modifier = Modifier.fillMaxWidth().testTag("meeting-process")) {
                             // A new run writes a new journal; the previous one stays on disk.
@@ -218,11 +211,6 @@ private fun HomeScreen(
                     }
                     Text(meetingState.message, modifier = Modifier.testTag("meeting-selected-message"))
                     meetingState.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                    if (meetingState.summary.isNotBlank()) {
-                        HorizontalDivider()
-                        Text("Résumé extractif", style = MaterialTheme.typography.titleMedium)
-                        SelectionContainer { Text(meetingState.summary, modifier = Modifier.testTag("meeting-summary")) }
-                    }
                     if (meetingState.page != null && meetingState.page.segments.isNotEmpty()) {
                         HorizontalDivider()
                         Text("Transcription (${meetingState.page.total} segments)", style = MaterialTheme.typography.titleMedium)
@@ -245,7 +233,7 @@ private fun HomeScreen(
                         Text("Retour à la liste")
                     }
                 } else {
-                    Button(onClick = { startMeeting(summarize) },
+                    Button(onClick = { startMeeting() },
                         enabled = !state.preparing && !state.recovering &&
                             state.phase == Phase.OFF && state.modelsReady &&
                             ready.microphone && ready.notifications,
@@ -358,7 +346,7 @@ private fun HomeScreen(
     }
     deleting?.let { id ->
         AlertDialog(onDismissRequest = { deleting = null }, title = { Text("Supprimer cette réunion ?") },
-            text = { Text("L’audio, les transcriptions et le résumé de cette réunion seront effacés du téléphone. Cette action est définitive ; exportez ou copiez d’abord ce que vous voulez garder.") },
+            text = { Text("L’audio et les transcriptions de cette réunion seront effacés du téléphone. Cette action est définitive ; exportez ou copiez d’abord ce que vous voulez garder.") },
             confirmButton = { TextButton(onClick = { deleting = null; deleteMeeting(id) }, modifier = Modifier.testTag("meeting-delete-confirm")) { Text("Supprimer") } },
             dismissButton = { TextButton(onClick = { deleting = null }) { Text("Annuler") } })
     }
