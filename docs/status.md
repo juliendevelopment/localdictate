@@ -2,7 +2,7 @@
 
 ## Situation on 3 November 2026
 
-**Dictation** ships as signed APKs on GitHub releases. Versions 0.1.0 to 0.2.0 were published while the repository was private (kept in a private archive with the original history); the public repository starts with **v0.2.1**, same app as 0.2.0 plus the Apache 2.0 license and English documentation. The app is installed and tested by the maintainer on a Pixel with Google Keep, a messaging app and Gboard. The **meeting** mode (sequential 2-hour recording, then local transcript and extractive summary, see [meeting.md](meeting.md)) is merged into `main` but not in any release yet and **not tested on a phone**.
+**Dictation** ships as signed APKs on GitHub releases. Versions 0.1.0 to 0.2.0 were published while the repository was private (kept in a private archive with the original history); the public repository starts with **v0.2.1**, same app as 0.2.0 plus the Apache 2.0 license and English documentation. The app is installed and tested by the maintainer on a Pixel with Google Keep, a messaging app and Gboard. The **meeting** mode (sequential 2-hour recording, then local transcript and extractive summary, see [meeting.md](meeting.md)) ships in **v0.3.0** but is **not tested on a phone** yet.
 
 Verified on the phone:
 
@@ -21,7 +21,7 @@ Insertion used to fail because of a design error (requiring a "frozen world" dur
 2. **Transcription errors**: some remain, fewer when speaking close to the microphone. Next: compare microphone level/AGC (the VOICE_RECOGNITION source has no gain) and Silero settings, with real sentences and their expected text.
 3. **Insertion in chat apps** (Discord, messaging apps): refused in 0.2.3 while Keep works. 0.2.4 (hint read as empty) did not fix the reported app: its focused field is not exposed as editable (`modifiable=false`, no selection). 0.2.5 adds an editor-only target (see `insertion.md`), host-tested only. Next: on the Pixel, the same chat app with an empty and a non-empty field, then Discord and Keep again (no regression); read the message under « Durée capturée » if it fails.
 4. If an insertion refusal comes back, read the reason shown (table in `insertion.md`) and fix **that rule**; do not reintroduce event-based invalidation or frozen editor sessions.
-5. **Meeting mode (merged, host-tested only)**. Next: install a build from `main` on the Pixel (CI development APK or the next release), prepare the models, then record a 2–5 minute French meeting, stop, let it transcribe and summarize; check the transcript, the summary, Markdown/WAV export and deletion. Then the same with the screen off and locked, then a 30–60 minute session measuring processing time, heat and battery; finally 2 hours. Report the phase and message shown in the « Réunion » tab if anything fails.
+5. **Meeting mode (merged, host-tested only)**. Next: install v0.3.0 on the Pixel, prepare the models, then record a 2–5 minute French meeting, stop, let it transcribe and summarize; check the transcript, the summary, Markdown/WAV export and deletion. Then the same with the screen off and locked, then a 30–60 minute session measuring processing time, heat and battery; finally 2 hours. Report the phase and message shown in the « Réunion » tab if anything fails.
 6. Then: 10–15 minute dictation endurance (memory, heat), other apps (web fields), English.
 
 7. **Weekly statistics** (words, dictated time, dictations per week, app-private, shown under the history) are released in v0.2.3 but not checked on the phone yet. Next: check on the Pixel that a dictation increments the current week and that the duration matches « Durée capturée ».
@@ -48,6 +48,7 @@ Procedure: [ci.md](ci.md#releases). Never move a tag whose release exists. Versi
 | 0.2.3 | Weekly statistics: words, dictated time and dictations per week, app-private counts only |
 | 0.2.4 | Insertion into empty fields showing a placeholder (Discord, messaging apps) |
 | 0.2.5 | Editor-only insertion target for focused fields not exposed as editable (web fields, custom views) |
+| 0.3.0 | Meeting mode: 2-hour private recording, then local transcript and extractive summary, export/deletion. Host-tested only |
 
 ## Agreed scope
 
@@ -70,7 +71,6 @@ See the [scope](mvp.md), [architecture](architecture.md), [insertion](insertion.
 1. Insertion: the remaining risks listed in `insertion.md` (composition set before input started and never reported, web fields, recreated editors, Android 29–32).
 2. Microphone FGS armed from a visible activity, microphone closed at rest, stop/revocation/mute/notification reachable. No service silently recreated from an old command. Applies to both `DictationService` and `MeetingService`.
 3. Meeting: background recording endurance (screen off, lock, phone call, another app taking the microphone), post-recording transcription time, RAM, heat and battery on the Pixel. The extractive summary does not separate facts, decisions and actions (an `mvp.md` acceptance criterion); a better summary engine needs a separate decision.
-4. Release of a version including the meeting mode, once the first phone checks are done.
 
 ## Validation
 
