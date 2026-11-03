@@ -60,4 +60,4 @@ Process death loses audio segments still in RAM; text already synced is recovere
 
 ## Meeting
 
-A separate, visible mode, never pasting into another app: up to 2 hours recorded directly to private storage, then, after stop, local transcription with the dictation engine and a local extractive summary (original sentences with their segment times, no generative model). It shares the usage lock with dictation and preparation. Details: [meeting.md](meeting.md). Host-tested only.
+A separate, visible mode, never pasting into another app: up to 2 hours recorded directly to private storage, then, after stop, local transcription with the dictation engine; the transcript is copied as plain text or exported as Markdown by the user. There is no in-app summary. It shares the usage lock with dictation and preparation. Details: [meeting.md](meeting.md). Host-tested only.

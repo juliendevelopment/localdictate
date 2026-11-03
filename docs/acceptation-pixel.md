@@ -22,7 +22,7 @@ Install a signed release APK. Record Android version, device, APK SHA, duration,
 
 ## Meeting ([meeting.md](meeting.md))
 
-- [ ] Short meeting (2–5 min, French): « Démarrer une réunion (FR) », notification shown, duration counting; stop from the app, then from the notification. Phases go `RECORDING` → `TRANSCRIBING` → `SUMMARIZING` → `COMPLETE`; transcript and summary match what was said, no invented text.
+- [ ] Short meeting (2–5 min, French): « Démarrer un enregistrement », notification shown, duration counting; stop from the app, then from the notification. Phases go `RECORDING` → `TRANSCRIBING` → `COMPLETE`; the transcript matches what was said, no invented text; « Copier la transcription » and the Markdown export give the same plain text.
 - [ ] While a meeting records or processes, dictation cannot be armed, and the reverse.
 - [ ] Screen off and locked during recording, then during processing: no gap in the audio (compare the WAV export), processing goes on.
 - [ ] Interruptions: phone call, another app taking the microphone, revoke microphone, kill the app: session left `RECORDED`/`CANCELLED`/`ERROR` with a message, audio kept, « Transcrire et résumer » resumes explicitly.
