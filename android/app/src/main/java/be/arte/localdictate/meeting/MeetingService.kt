@@ -126,8 +126,9 @@ class MeetingService : Service() {
                 persist(repository.read(request.id))
                 val diagnostic = repository.recoverAudio(request.id) // Explicit UI action, original preserved before repair.
                 val actualMs = SavedPcm(repository.audio(request.id)).use { it.samples * 1000 / 16_000 }
+                // Each explicit run reports only its own outcome; earlier runs' messages are not repeated.
                 persist(checkNotNull(session).copy(phase = MeetingPhase.RECORDED, durationMs = actualMs,
-                    diagnostic = checkNotNull(session).diagnostic + " " + diagnostic))
+                    diagnostic = "Nouvelle transcription. $diagnostic"))
             }
             if (cancelled || destroyed) throw CancellationException()
             wake(PROCESS_TIMEOUT_MS)
@@ -174,9 +175,11 @@ class MeetingService : Service() {
         } catch (_: OutOfMemoryError) {
             session?.let { runCatching { persist(it.copy(phase = MeetingPhase.ERROR, diagnostic = it.diagnostic + " Mémoire insuffisante ; audio/journal conservés.")) } }
             controller.update { it.copy(error = "Mémoire insuffisante ; données privées conservées.") }
-        } catch (_: Exception) {
+        } catch (failure: Exception) {
+            // The technical cause (our checks or IO, never transcript text) is what makes a phone report actionable.
+            val cause = "${failure.javaClass.simpleName}: ${failure.message.orEmpty().take(120)}"
             session?.let { runCatching { persist(it.copy(phase = MeetingPhase.ERROR,
-                diagnostic = it.diagnostic + " Échec du traitement ou stockage. Audio et transcription conservés ; vérifiez l’espace avant une reprise explicite.")) } }
+                diagnostic = it.diagnostic + " Échec vers ${it.processedMs / 1000} s ($cause). Audio et texte déjà transcrit conservés ; « Retranscrire » relance explicitement.")) } }
             controller.update { it.copy(error = "Réunion interrompue : audio et texte déjà transcrit conservés.") }
         } finally {
             timer?.cancel()

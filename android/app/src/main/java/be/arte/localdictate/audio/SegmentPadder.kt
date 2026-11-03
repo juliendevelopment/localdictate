@@ -11,7 +11,7 @@ class SegmentPadder(
     rate: Int = 16_000,
     private val before: Int = rate * 3 / 10,
     private val after: Int = rate * 3 / 10,
-    capacity: Int = rate * 40,
+    capacity: Int = rate * 60, // Holds a whole over-long VAD segment (see SpeechSplitter) plus its margins.
 ) {
     init { require(before >= 0 && after >= 0 && capacity > 0) }
     private val ring = FloatArray(capacity)

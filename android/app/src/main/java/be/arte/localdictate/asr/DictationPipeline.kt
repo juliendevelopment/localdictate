@@ -4,7 +4,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import java.util.concurrent.atomic.AtomicReference
 
-/** Longest segment sent to the recognizer: VAD maximum (20 s) plus margins, with headroom. */
+/** Longest segment sent to the recognizer: split VAD maximum (20 s, see SpeechSplitter) plus margins, with headroom. */
 const val MAX_SEGMENT_SAMPLES = 25 * 16_000
 
 /** Segmentation is replaceable in JVM fixtures; production uses only Silero. */

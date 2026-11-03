@@ -2,6 +2,7 @@ package be.arte.localdictate.asr
 
 import be.arte.localdictate.audio.PcmFramer
 import be.arte.localdictate.audio.SegmentPadder
+import be.arte.localdictate.audio.SpeechSplitter
 import be.arte.localdictate.audio.TimedSpeech
 import be.arte.localdictate.models.ModelFiles
 import com.k2fsa.sherpa.onnx.*
@@ -65,9 +66,13 @@ class SileroSegmenter(file: File) : SpeechSegmenter, AutoCloseable {
             vad.pop()
             val count = (minOf(speech.start + speech.samples.size, framer.sampleCount) - speech.start)
                 .coerceAtLeast(0).toInt()
-            check(count <= MAX_SEGMENT_SAMPLES) { "Segment VAD trop long" }
-            // Real captured audio around the segment (never the zero padding of the last frame).
-            if (count > 0) padder.widenTimed(speech.start, count)?.let { result += it }
+            // Real captured audio around the segment (never the zero padding of the last frame). Segments longer
+            // than the VAD maximum do happen on continuous speech; they are split, never rejected.
+            var offset = 0
+            for (length in SpeechSplitter.lengths(speech.samples, count)) {
+                padder.widenTimed(speech.start.toLong() + offset, length)?.let { result += it }
+                offset += length
+            }
         }
     }
     override fun close() = vad.release()
