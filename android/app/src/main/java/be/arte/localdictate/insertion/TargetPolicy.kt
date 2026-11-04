@@ -30,6 +30,13 @@ object TargetPolicy {
             InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD)) ||
             (inputClass == InputType.TYPE_CLASS_NUMBER && variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD)
     }
+    /**
+     * TextView reports a selection to accessibility only when its text is non-empty, so an empty field
+     * (Discord, chat composers) shows -1/-1. An empty field has a single possible cursor: 0. A non-empty field
+     * without a reported selection stays unknown and is refused.
+     */
+    fun cursor(length: Int, start: Int, end: Int): Pair<Int, Int> =
+        if (length == 0 && start < 0 && end < 0) 0 to 0 else start to end
     fun eligible(target: TargetState, ownPackage: String): Boolean =
         target.packageName.isNotBlank() && target.packageName != ownPackage &&
             target.editable && target.visible && target.enabled && !target.password && target.focused &&

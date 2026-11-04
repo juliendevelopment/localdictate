@@ -104,9 +104,10 @@ open class InsertionService : AccessibilityService() {
         // Password content is never read, even for hashing.
         val password = node.isPassword || TargetPolicy.password(node.inputType)
         val content = if (password) "" else fieldText(node)
+        val (start, end) = TargetPolicy.cursor(content.length, node.textSelectionStart, node.textSelectionEnd)
         return TargetState(node.packageName?.toString().orEmpty(), node.windowId,
             node.viewIdResourceName, node.className?.toString().orEmpty(), TargetPolicy.hash(content),
-            content.length, node.textSelectionStart, node.textSelectionEnd, node.isEditable,
+            content.length, start, end, node.isEditable,
             password, node.isFocused, node.isVisibleToUser, node.isEnabled, node.inputType)
     }
     /**

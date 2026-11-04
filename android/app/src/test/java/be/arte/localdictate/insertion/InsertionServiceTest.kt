@@ -172,6 +172,24 @@ class InsertionServiceTest {
         assertEquals(listOf("Bonjour"), editor.sent)
         noClipboardOrNodeAction()
     }
+    @Test fun emptyEditableFieldWithoutReportedCursorReceivesTheText() = runTest(dispatcher) {
+        // TextView reports a selection only for non-empty text: an empty composer has no cursor in accessibility.
+        node.text = "Envoyer un message"; node.isShowingHintText = true; node.setTextSelection(-1, -1)
+        editor.context = EditorSurrounding("", 0, 0, 0, false)
+        editor.commitEffect = { text ->
+            node.isShowingHintText = false; node.text = text; node.setTextSelection(text.length, text.length)
+        }
+        assertTrue(service.snapshot())
+        assertTrue(service.insert("Bonjour").contains("Insertion observée"))
+        assertEquals(listOf("Bonjour"), editor.sent)
+        noClipboardOrNodeAction()
+    }
+    @Test fun nonEmptyEditableFieldWithoutReportedCursorIsStillRefused() = runTest(dispatcher) {
+        node.setTextSelection(-1, -1)
+        assertFalse(service.snapshot())
+        assertTrue(service.lastRefusal.contains("non éligible"))
+        assertEquals(0, editor.commits); noClipboardOrNodeAction()
+    }
     /** Web or custom view: focused, not exposed as editable, no selection; the keyboard's editor holds the field. */
     private fun editorOnlyField(fieldText: String = "Salut", cursor: Int = fieldText.length) {
         node.isEditable = false; node.text = "Conversation avec Marie, 3 messages non lus"; node.setTextSelection(-1, -1)
