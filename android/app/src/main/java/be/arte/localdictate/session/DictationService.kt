@@ -16,6 +16,7 @@ import be.arte.localdictate.DictateApplication
 import be.arte.localdictate.MainActivity
 import be.arte.localdictate.R
 import be.arte.localdictate.asr.*
+import be.arte.localdictate.audio.MediaPauser
 import be.arte.localdictate.audio.MicrophoneCapture
 import be.arte.localdictate.audio.Pcm16
 import be.arte.localdictate.insertion.InsertionService
@@ -30,6 +31,7 @@ class DictationService : Service() {
     private var sessionJob: Job? = null
     private var engine: LocalRecognizer? = null
     private var microphone: MicrophoneCapture? = null
+    private var mediaPauser: MediaPauser? = null
     private var wakeLock: PowerManager.WakeLock? = null
     @Volatile private var bubble: FloatingControl? = null
     private var cancelRequested = false
@@ -123,6 +125,7 @@ class DictationService : Service() {
         val startRefusal = if (hasTarget) "" else targetService?.lastRefusal.orEmpty()
         val recorder = MicrophoneCapture(applicationContext)
         microphone = recorder
+        mediaPauser = MediaPauser(applicationContext).also { it.pause() }
         controller.update { it.copy(phase = Phase.RECORDING, micLive = false, durationMs = 0, error = null, notice = null,
             message = if (hasTarget) "Dictée locale. Les pauses ne terminent pas la session."
                 else "Aucun champ compatible : la dictée sera copiée dans le presse-papiers à l’arrêt.") }
@@ -214,6 +217,7 @@ class DictationService : Service() {
             catch (_: Throwable) { controller.update { it.copy(error = "Dictée interrompue : texte reconnu conservé, copie manuelle disponible.") } }
             finally {
                 recorder.stop()
+                mediaPauser?.resume(); mediaPauser = null
                 wakeLock?.let { if (it.isHeld) it.release() }; wakeLock = null
                 withContext(NonCancellable + Dispatchers.Default) { detector?.close() }
                 targetService?.forget()
@@ -236,6 +240,7 @@ class DictationService : Service() {
     fun stopCapture() {
         if (controller.state.value.phase == Phase.RECORDING) {
             microphone?.stop()
+            mediaPauser?.resume()
             controller.update { it.copy(phase = Phase.PROCESSING, message = "Micro fermé. Traitement des derniers segments avant insertion…") }
         }
     }
@@ -248,6 +253,7 @@ class DictationService : Service() {
     }
     override fun onDestroy() {
         microphone?.stop()
+        mediaPauser?.resume(); mediaPauser = null
         wakeLock?.let { if (it.isHeld) it.release() }; wakeLock = null
         bubble?.close()
         if (wakeRegistered) { runCatching { unregisterReceiver(wake) }; wakeRegistered = false }
