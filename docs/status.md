@@ -56,6 +56,7 @@ Procedure: [ci.md](ci.md#releases). Never move a tag whose release exists. Versi
 | 0.3.3 | Over-long speech segments split instead of failing the transcription (speakerphone calls); failure position and cause shown |
 | 0.3.4 | Meeting capture: 60 s disk buffer and one sync per second instead of a sub-second queue synced per block; alert when a recording stops on its own |
 | 0.3.5 | Insertion into empty fields that report no cursor (Discord, Paseo) |
+| 0.3.6 | Other apps' media paused during a dictation (transient audio focus) |
 
 ## Agreed scope
 
