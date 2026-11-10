@@ -19,6 +19,7 @@ import be.arte.localdictate.asr.*
 import be.arte.localdictate.audio.MediaPauser
 import be.arte.localdictate.audio.MicrophoneCapture
 import be.arte.localdictate.audio.Pcm16
+import be.arte.localdictate.audio.VoiceGain
 import be.arte.localdictate.insertion.InsertionService
 import be.arte.localdictate.insertion.PrivateClipboard
 import kotlinx.coroutines.*
@@ -151,6 +152,8 @@ class DictationService : Service() {
                     override fun finish() = vad().finish()
                 }
                 var live = false
+                // Soft speech close to the microphone is raised before VAD and ASR; loud speech is left unchanged.
+                val voiceGain = VoiceGain()
                 val failure = DictationPipeline(segmenter,
                     capture = { emit -> recorder.read(onSilenced = { silenced ->
                         if (silenced) {
@@ -159,8 +162,9 @@ class DictationService : Service() {
                         }
                     }, emit = {
                         if (!live) { live = true; controller.update { state -> state.copy(micLive = true) } }
-                        bubble?.level(Pcm16.level(it.samples))
-                        emit(it.samples)
+                        val samples = voiceGain.apply(it.samples)
+                        bubble?.level(Pcm16.level(samples))
+                        emit(samples)
                     }) },
                     stopCapture = recorder::stop,
                     recognize = { decoder.recognize(it) },
