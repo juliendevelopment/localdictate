@@ -6,7 +6,7 @@
 
 The **meeting** mode (sequential 2-hour recording, then local transcript to copy or export, see [meeting.md](meeting.md)) ships since **v0.3.0**. It has had three phone tests (short French notes, a speakerphone call, a real meeting of about 1 h 40), each followed by a fix (v0.3.1–v0.3.4); a full 2-hour session and the fixes themselves are not verified on the phone yet.
 
-**v0.3.8** is committed on `main` and host-tested (see [release notes](releases/v0.3.8.md)); its tag is not pushed yet. Seven releases wait for a phone check: they are grouped in the next phone session below.
+**v0.3.8** is released (12 November 2026, [release notes](releases/v0.3.8.md)), host-tested only. Seven releases wait for a phone check: they are grouped in the next phone session below.
 
 Verified on the phone:
 
@@ -22,7 +22,7 @@ Insertion used to fail because of a design error (requiring a "frozen world" dur
 
 ## Next phone session
 
-**Precise next action.** One sitting of about 30 minutes on the Pixel, with the APK of v0.3.8 once it is released. Steps and boxes: [acceptation-pixel.md](acceptation-pixel.md). For each step, if something fails, report the « Diagnostic : … » line and the message under « Durée capturée » (dictation), or the state and message in the « Réunion » tab (meeting).
+**Precise next action.** One sitting of about 30 minutes on the Pixel, with the v0.3.8 APK from the GitHub release. Steps and boxes: [acceptation-pixel.md](acceptation-pixel.md). For each step, if something fails, report the « Diagnostic : … » line and the message under « Durée capturée » (dictation), or the state and message in the « Réunion » tab (meeting).
 
 1. **Start of speech and soft speech** (v0.3.7, v0.3.8; items 1 and 2): a short phrase spoken right after the tap, three times; then soft, normal and loud voice in one dictation. Note the diagnostic line each time.
 2. **Empty chat fields** (v0.2.5, v0.3.5; item 3): Discord and Paseo with an empty field, then with text already in it, then Keep (no regression).
@@ -76,7 +76,7 @@ Procedure: [ci.md](ci.md#releases). Never move a tag whose release exists. Versi
 | 0.3.5 | Insertion into empty fields that report no cursor (Discord, Paseo) |
 | 0.3.6 | Other apps' media paused during a dictation (transient audio focus) |
 | 0.3.7 | Dictation: automatic software gain so soft speech close to the microphone is picked up |
-| 0.3.8 | Dictation: microphone opened first on tap, 5 s audio queue, content-free diagnostic line. Meeting: cancellation cause recorded, French states, readable durations. **Not released yet** (tag pending) |
+| 0.3.8 | Dictation: microphone opened first on tap, 5 s audio queue, content-free diagnostic line. Meeting: cancellation cause recorded, French states, readable durations. Host-tested only |
 
 ## Agreed scope
 
