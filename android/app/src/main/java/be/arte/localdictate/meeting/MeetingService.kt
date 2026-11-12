@@ -11,6 +11,8 @@ import android.os.PowerManager
 import be.arte.localdictate.DictateApplication
 import be.arte.localdictate.MainActivity
 import be.arte.localdictate.R
+import be.arte.localdictate.formatClock
+import be.arte.localdictate.formatDuration
 import be.arte.localdictate.asr.LocalRecognizer
 import be.arte.localdictate.asr.SileroSegmenter
 import be.arte.localdictate.audio.MicrophoneCapture
@@ -164,7 +166,7 @@ class MeetingService : Service() {
                     controller.update { it.copy(processedMs = ms) }
                     if (ms - lastSaved >= 1000) {
                         persist(checkNotNull(session).copy(processedMs = ms)); lastSaved = ms
-                        notifyProgress("Transcription : ${ms / 1000} / ${checkNotNull(session).durationMs / 1000} s")
+                        notifyProgress("Transcription : ${formatDuration(ms)} / ${formatDuration(checkNotNull(session).durationMs)}")
                     }
                 })
             }
@@ -186,7 +188,7 @@ class MeetingService : Service() {
             // The technical cause (our checks or IO, never transcript text) is what makes a phone report actionable.
             val cause = "${failure.javaClass.simpleName}: ${failure.message.orEmpty().take(120)}"
             session?.let { runCatching { persist(it.copy(phase = MeetingPhase.ERROR,
-                diagnostic = it.diagnostic + " Échec vers ${it.processedMs / 1000} s ($cause). Audio et texte déjà transcrit conservés ; « Retranscrire » relance explicitement.")) } }
+                diagnostic = it.diagnostic + " Échec vers ${formatClock(it.processedMs)} ($cause). Audio et texte déjà transcrit conservés ; « Retranscrire » relance explicitement.")) } }
             controller.update { it.copy(error = "Réunion interrompue : audio et texte déjà transcrit conservés.") }
         } finally {
             timer?.cancel()

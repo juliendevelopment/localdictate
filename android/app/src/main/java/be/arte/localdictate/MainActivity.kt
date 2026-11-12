@@ -169,17 +169,12 @@ private fun HomeScreen(
                 Text("Jusqu’à 2 heures", style = MaterialTheme.typography.titleLarge)
                 Text("Enregistrement direct sur disque jusqu’à 2 heures, puis transcription locale après arrêt, à copier ou exporter en Markdown pour la donner à l’outil de votre choix (un LLM pour le résumé, par exemple). Langue détectée automatiquement (français, anglais, néerlandais…). Les pauses courtes sont regroupées pour garder le contexte des phrases. Aucun collage automatique dans une autre application. Accord des participants à votre charge.")
                 if (meetingState.busy || meetingState.phase != null) {
-                    Text("État : " + when (meetingState.phase) {
-                        MeetingPhase.RECORDING -> "enregistrement local en cours"
-                        MeetingPhase.RECORDED -> "audio sauvegardé, prêt pour traitement"
-                        MeetingPhase.TRANSCRIBING -> "transcription locale (${meetingState.processedMs / 1000} s / ${meetingState.durationMs / 1000} s)"
-                        MeetingPhase.COMPLETE -> "terminé"
-                        MeetingPhase.INTERRUPTED -> "interrompu"
-                        MeetingPhase.CANCELLED -> "annulé"
-                        MeetingPhase.ERROR -> "erreur"
-                        else -> "occupé"
+                    Text("État : " + when (val phase = meetingState.phase) {
+                        null -> "occupé"
+                        MeetingPhase.TRANSCRIBING -> "transcription locale (${formatDuration(meetingState.processedMs)} / ${formatDuration(meetingState.durationMs)})"
+                        else -> meetingPhaseLabel(phase)
                     }, modifier = Modifier.testTag("meeting-state"))
-                    if (meetingState.durationMs > 0) Text("Durée : ${meetingState.durationMs / 1000} s / 7200 s")
+                    if (meetingState.durationMs > 0) Text("Durée : ${formatDuration(meetingState.durationMs)} / 2 h")
                     Text(meetingState.message, modifier = Modifier.testTag("meeting-message"))
                     if (meetingState.phase == MeetingPhase.RECORDING) {
                         Button(onClick = stopMeeting, modifier = Modifier.fillMaxWidth().testTag("meeting-stop")) {
@@ -193,7 +188,7 @@ private fun HomeScreen(
                 } else if (meetingState.selected != null) {
                     val session = meetingState.selected
                     Text("Réunion sélectionnée : ${session.id.take(8)}", style = MaterialTheme.typography.titleMedium)
-                    Text("Phase : ${session.phase} • Durée : ${session.durationMs / 1000} s")
+                    Text("État : ${meetingPhaseLabel(session.phase)} • Durée : ${formatDuration(session.durationMs)}")
                     if (session.diagnostic.isNotBlank()) Text(session.diagnostic)
                     if (session.journal.isNotEmpty()) {
                         Button(onClick = { copyMeeting(session.id) }, modifier = Modifier.fillMaxWidth().testTag("meeting-copy")) {
@@ -215,7 +210,7 @@ private fun HomeScreen(
                         HorizontalDivider()
                         Text("Transcription (${meetingState.page.total} segments)", style = MaterialTheme.typography.titleMedium)
                         meetingState.page.segments.forEach { segment ->
-                            Text("[${segment.startMs / 1000}–${segment.endMs / 1000} s] ${segment.text}")
+                            Text("[${formatClock(segment.startMs)}–${formatClock(segment.endMs)}] ${segment.text}")
                         }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -254,7 +249,7 @@ private fun HomeScreen(
                             Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Text("Réunion du ${java.time.Instant.ofEpochMilli(s.createdMs).atZone(java.time.ZoneId.systemDefault()).toLocalDateTime().format(java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy HH:mm"))}")
-                                    Text("Durée : ${s.durationMs / 1000} s • État : ${s.phase}")
+                                    Text("Durée : ${formatDuration(s.durationMs)} • État : ${meetingPhaseLabel(s.phase)}")
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         OutlinedButton(onClick = { selectMeeting(s.id) }, modifier = Modifier.testTag("meeting-open-${s.id}")) {
                                             Text("Consulter")
@@ -278,7 +273,7 @@ private fun HomeScreen(
                     Phase.RECORDING -> "enregistrement local"
                     Phase.PROCESSING -> "micro fermé, traitement et insertion"
                 }, modifier = Modifier.testTag("session-state"))
-                if (state.durationMs > 0) Text("Durée capturée : ${state.durationMs / 1000} s / 900 s")
+                if (state.durationMs > 0) Text("Durée capturée : ${formatDuration(state.durationMs)} / 15 min")
                 state.diagnostic?.let { Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("session-diagnostic")) }
                 Text(state.message, modifier = Modifier.testTag("session-message"))
                 state.error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("session-error")) }

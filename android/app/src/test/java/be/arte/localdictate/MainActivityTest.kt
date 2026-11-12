@@ -50,6 +50,17 @@ class MainActivityTest {
         compose.runOnIdle { controller.update { it.copy(diagnostic = null) } }
         compose.onNodeWithTag("session-diagnostic").assertDoesNotExist()
     }
+    @Test fun savedMeetingShowsFrenchPhaseAndReadableDuration() {
+        val meetings = (compose.activity.application as DictateApplication).meetings
+        val session = meetings.repository.create()
+            .copy(phase = be.arte.localdictate.meeting.MeetingPhase.RECORDED, durationMs = 3_784_000)
+        meetings.repository.save(session)
+        kotlinx.coroutines.runBlocking { meetings.refresh() }
+        compose.onNodeWithTag("mode-meeting").performClick()
+        compose.onNodeWithText("Durée : 1 h 03 min • État : audio sauvegardé, prêt pour traitement").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("RECORDED", substring = true).assertDoesNotExist()
+        compose.runOnIdle { meetings.repository.delete(session.id) }
+    }
     @Test fun meetingIsHonestAndNeverStartsAService() {
         compose.onNodeWithTag("mode-meeting").performClick()
         compose.onNodeWithText("Jusqu’à 2 heures").assertIsDisplayed()
