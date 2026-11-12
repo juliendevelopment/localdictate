@@ -1,8 +1,12 @@
 # LocalDictate status
 
-## Situation on 3 November 2026
+## Situation on 12 November 2026
 
-**Dictation** ships as signed APKs on GitHub releases. Versions 0.1.0 to 0.2.0 were published while the repository was private (kept in a private archive with the original history); the public repository starts with **v0.2.1**, same app as 0.2.0 plus the Apache 2.0 license and English documentation. The app is installed and tested by the maintainer on a Pixel with Google Keep, a messaging app and Gboard. The **meeting** mode (sequential 2-hour recording, then local transcript to copy or export, see [meeting.md](meeting.md)) ships in **v0.3.0** but is **not tested on a phone** yet.
+**Dictation** ships as signed APKs on GitHub releases. Versions 0.1.0 to 0.2.0 were published while the repository was private (kept in a private archive with the original history); the public repository starts with **v0.2.1**, same app as 0.2.0 plus the Apache 2.0 license and English documentation. The app is installed and tested by the maintainer on a Pixel with Google Keep, a messaging app and Gboard.
+
+The **meeting** mode (sequential 2-hour recording, then local transcript to copy or export, see [meeting.md](meeting.md)) ships since **v0.3.0**. It has had three phone tests (short French notes, a speakerphone call, a real meeting of about 1 h 40), each followed by a fix (v0.3.1–v0.3.4); a full 2-hour session and the fixes themselves are not verified on the phone yet.
+
+**v0.3.8** is committed on `main` and host-tested (see [release notes](releases/v0.3.8.md)); its tag is not pushed yet. Seven releases wait for a phone check: they are grouped in the next phone session below.
 
 Verified on the phone:
 
@@ -11,22 +15,36 @@ Verified on the phone:
 - Parakeet + Silero preparation, JNI loading, good French recognition;
 - **reliable insertion at the cursor since v0.1.8**: several dictations in a row in Keep and in a messaging app, including a long text;
 - automatic copy fallback and history of the last 5 texts;
-- the v0.2.0 bubble (square at rest, ✕ | level | ✓ pill), approved by the maintainer.
+- the v0.2.0 bubble (square at rest, ✕ | level | ✓ pill), approved by the maintainer;
+- meeting: recording, transcription and copy on short notes and a call (v0.3.0–v0.3.1, see item 5).
 
 Insertion used to fail because of a design error (requiring a "frozen world" during the dictation), fixed by the v0.1.8 redesign. Full analysis, version-by-version test log, current rules and how to read the messages: **[insertion.md](insertion.md)**.
 
-## Known issues and next steps
+## Next phone session
 
-1. **Start of speech**: one still has to wait 1–2 s after tapping the bubble before speaking, otherwise the beginning is sometimes missing (about one short phrase in two). v0.1.9 already opens the microphone first. Next: measure on the phone the real delay between the tap and the first audio (AudioRecord start, wake lock, journal write), and consider keeping a short audio buffer from the tap.
-2. **Transcription errors / soft speech**: some errors remain, fewer when speaking close to the microphone; the maintainer reported (10 November) that soft speech close to the microphone is often not picked up while a loud voice works. The VOICE_RECOGNITION source has no gain, so v0.3.7 adds a software automatic gain to dictation only (`VoiceGain`: up to +18 dB, peaks towards −6 dBFS, never below 1×, no clipping, 1 s release), host-tested. Next on the Pixel with v0.3.7: one dictation with a soft voice, a normal voice and a loud one; if soft speech is still missed, check whether the bubble level moves (no level → capture; level but no text → Silero threshold 0.5 to lower, measured on real sentences).
-3. **Insertion in chat apps** (Discord, messaging apps): refused in 0.2.3 while Keep works. 0.2.4 (hint read as empty) did not fix the reported app: its focused field is not exposed as editable (`modifiable=false`, no selection). 0.2.5 adds an editor-only target (see `insertion.md`), host-tested only. Phone test on v0.3.4 (4 November): Discord and an empty Paseo field refused with `modifiable=true … sélection=-1--1/0` (an empty `TextView` reports no cursor to accessibility); Paseo inserts when the field already holds text. v0.3.5 treats an empty field without a reported cursor as cursor 0, host-tested. Next: on the Pixel with v0.3.5, Discord and Paseo with an **empty** field, then with text already in it, then Keep (no regression); read the message under « Durée capturée » if it fails.
+**Precise next action.** One sitting of about 30 minutes on the Pixel, with the APK of v0.3.8 once it is released. Steps and boxes: [acceptation-pixel.md](acceptation-pixel.md). For each step, if something fails, report the « Diagnostic : … » line and the message under « Durée capturée » (dictation), or the state and message in the « Réunion » tab (meeting).
+
+1. **Start of speech and soft speech** (v0.3.7, v0.3.8; items 1 and 2): a short phrase spoken right after the tap, three times; then soft, normal and loud voice in one dictation. Note the diagnostic line each time.
+2. **Empty chat fields** (v0.2.5, v0.3.5; item 3): Discord and Paseo with an empty field, then with text already in it, then Keep (no regression).
+3. **Media pause** (v0.3.6; item 6): music or a podcast playing pauses on the tap and resumes after ✓ and after ✕; nothing starts when nothing was playing; note any player that ignores it.
+4. **Weekly statistics** (v0.2.3; item 7): one dictation increments the current week; the duration matches « Durée capturée ».
+5. **Meeting** (v0.3.3, v0.3.4, v0.3.8; item 5): « Retranscrire » on the 3784 s recording and read the final state and cause; then one recording of 1 h 30 to 2 h with the screen off, then « Retranscrire » on it; it must end « terminé ».
+
+## Known issues
+
+1. **Start of speech**: one still had to wait 1–2 s after tapping the bubble before speaking, otherwise the beginning was sometimes missing (about one short phrase in two). v0.1.9 opened the microphone before loading Silero; v0.3.8 also moves the target lookup, media pause, wake lock and journal write after the microphone start, and shows the measured delay from the tap to the first audio. Next: step 1 of the phone session. A delay under about 300 ms with the beginning still missing points at Silero or at the segment margins; a longer delay points at `AudioRecord` start-up, and a short audio buffer kept from the tap is the next design to consider.
+2. **Soft speech**: the maintainer reported (10 November) that soft speech close to the microphone is often not picked up while a loud voice works. The VOICE_RECOGNITION source has no gain, so v0.3.7 adds an automatic software gain to dictation only (`VoiceGain`: up to +18 dB, peaks towards −6 dBFS, never below 1×, no clipping, 1 s release), host-tested. Next: step 1 of the phone session. Reading the diagnostic: a peak below about −40 dBFS even with gain ×8 → capture (source or microphone routing); a reasonable peak but few or no segments → Silero (threshold 0.5 to lower, measured on real sentences); segments but wrong text → Parakeet.
+3. **Insertion in chat apps** (Discord, messaging apps): refused in 0.2.3 while Keep works. 0.2.4 (hint read as empty) did not fix the reported app: its focused field is not exposed as editable (`modifiable=false`, no selection). 0.2.5 adds an editor-only target (see `insertion.md`). Phone test on v0.3.4 (4 November): Discord and an empty Paseo field refused with `modifiable=true … sélection=-1--1/0` (an empty `TextView` reports no cursor to accessibility); Paseo inserts when the field already holds text. v0.3.5 treats an empty field without a reported cursor as cursor 0, host-tested. Next: step 2 of the phone session.
 4. If an insertion refusal comes back, read the reason shown (table in `insertion.md`) and fix **that rule**; do not reintroduce event-based invalidation or frozen editor sessions.
-5. **Meeting mode / long spoken notes**. First phone test (v0.3.0, 3 min 40 of French notes): every voiced region produced text, the gaps were real silences, but the transcript was fragmented with English filler words, and the export was not practical to give to an LLM. v0.3.1 merges segments separated by ≤ 3 s before decoding, adds « Copier la transcription (texte brut) », makes the summary optional and allows « Retranscrire » on a finished session. v0.3.2 removes the in-app summary (maintainer decision: confusing; the Markdown export goes to an LLM instead), highlights the selected mode and adds « Supprimer » to each saved meeting. Second phone test (v0.3.1, 4 min 33 speakerphone call): transcription failed at 129 s on every run. Replaying the WAV with sherpa-onnx 2.0.1 and the same Silero model/settings showed a 23 s segment at 129.7 s although the VAD maximum is 20 s; the meeting transcriber rejected anything over 22 s. v0.3.3 splits over-long VAD segments at their quietest point (`SpeechSplitter`, shared with dictation, which had the same latent limit at 25 s) and reports the failure position and technical cause in the meeting message. Replayed on that WAV: 17 blocks, longest 19.3 s, none rejected. Third phone test (v0.3.1, real meeting of about 1 h 40): recording stopped at 3784 s with « File d’écriture saturée ». Cause in the design, not chance: the capture queue held 32 microphone blocks (non-blocking reads return a few milliseconds each, so well under one second) and every block was synced to disk; one slow sync after an hour closed the microphone, and nothing alerted the user. v0.3.4 bounds the queue by audio duration (60 s), commits about one second per sync, saves session metadata every 10 s instead of every second, and posts a high-priority notification when a recording stops without the user's stop. The capture pipeline had no test at all; it now has four (tiny blocks, 2 s disk stall, stall beyond the buffer, 2-hour limit). Next on the Pixel: a full 1 h 30–2 h recording, then « Retranscrire » on it; check that the session ends `COMPLETE` (the 3784 s session ended `CANCELLED` after a re-transcription, cause not known yet). Next: on the Pixel, « Retranscrire » the first recording and compare with the v0.3.0 text (fragments, English fillers, punctuation, French sentences with English terms), then a Dutch sample; then, prepare the models, then record a 2–5 minute French meeting, stop, let it transcribe and summarize; check the transcript, the summary, Markdown/WAV export and deletion. Then the same with the screen off and locked, then a 30–60 minute session measuring processing time, heat and battery; finally 2 hours. Report the phase and message shown in the « Réunion » tab if anything fails.
-6. Then: 10–15 minute dictation endurance (memory, heat), other apps (web fields), English.
+5. **Meeting mode / long spoken notes**. History:
+   - v0.3.0, 3 min 40 of French notes: every voiced region produced text, the gaps were real silences, but the transcript was fragmented with English filler words and the export was not practical to give to an LLM. v0.3.1 merges segments separated by ≤ 3 s before decoding, adds « Copier la transcription (texte brut) » and « Retranscrire »; v0.3.2 removes the in-app summary (maintainer decision) and adds « Supprimer ».
+   - v0.3.1, 4 min 33 speakerphone call: transcription failed at 129 s on every run. Replaying the WAV with sherpa-onnx 2.0.1 showed a 23 s VAD segment although the maximum is 20 s, and the transcriber rejected anything over 22 s. v0.3.3 splits over-long segments at their quietest point (`SpeechSplitter`, shared with dictation) and reports the failure position and cause; replayed on that WAV: 17 blocks, longest 19.3 s.
+   - v0.3.1, real meeting of about 1 h 40: recording stopped at 3784 s with « File d’écriture saturée ». The capture queue held well under a second of audio and every block was synced; one slow sync closed the microphone and nothing alerted the user. v0.3.4 bounds the queue by audio duration (60 s), syncs about once per second, saves metadata every 10 s and posts a high-priority notification when a recording stops on its own. That 3784 s session later ended `CANCELLED` after a re-transcription, cause unknown: v0.3.8 records the cause of every cancellation.
 
-6b. **Media pause during dictation** (audio focus, unreleased): next, on the Pixel, play music/YouTube/a podcast, dictate, check it pauses on the tap and resumes after ✓ and ✕; check that nothing starts when nothing was playing, and note any player that ignores focus.
-
-7. **Weekly statistics** (words, dictated time, dictations per week, app-private, shown under the history) are released in v0.2.3 but not checked on the phone yet. Next: check on the Pixel that a dictation increments the current week and that the duration matches « Durée capturée ».
+   Next: step 5 of the phone session. Then, still to do: a Dutch sample; screen off and locked during processing; a 30–60 minute session measuring processing time, heat and battery; Markdown/WAV export and deletion.
+6. **Media pause during dictation** (v0.3.6, audio focus): next, step 3 of the phone session.
+7. **Weekly statistics** (words, dictated time, dictations per week, app-private, shown under the history; v0.2.3): next, step 4 of the phone session.
+8. Then: 10–15 minute dictation endurance (memory, heat), other apps (web fields), English.
 
 ## Releases
 
@@ -50,7 +68,7 @@ Procedure: [ci.md](ci.md#releases). Never move a tag whose release exists. Versi
 | 0.2.3 | Weekly statistics: words, dictated time and dictations per week, app-private counts only |
 | 0.2.4 | Insertion into empty fields showing a placeholder (Discord, messaging apps) |
 | 0.2.5 | Editor-only insertion target for focused fields not exposed as editable (web fields, custom views) |
-| 0.3.0 | Meeting mode: 2-hour private recording, then local transcript and extractive summary, export/deletion. Host-tested only |
+| 0.3.0 | Meeting mode: 2-hour private recording, then local transcript and extractive summary, export/deletion |
 | 0.3.1 | Meeting: segments joined across short pauses before decoding, plain-text transcript copy, optional summary, re-transcription |
 | 0.3.2 | In-app summary removed; Markdown export is the plain transcript for an LLM; selected mode highlighted; delete button per meeting |
 | 0.3.3 | Over-long speech segments split instead of failing the transcription (speakerphone calls); failure position and cause shown |
@@ -58,6 +76,7 @@ Procedure: [ci.md](ci.md#releases). Never move a tag whose release exists. Versi
 | 0.3.5 | Insertion into empty fields that report no cursor (Discord, Paseo) |
 | 0.3.6 | Other apps' media paused during a dictation (transient audio focus) |
 | 0.3.7 | Dictation: automatic software gain so soft speech close to the microphone is picked up |
+| 0.3.8 | Dictation: microphone opened first on tap, 5 s audio queue, content-free diagnostic line. Meeting: cancellation cause recorded, French states, readable durations. **Not released yet** (tag pending) |
 
 ## Agreed scope
 
@@ -70,9 +89,9 @@ See the [scope](mvp.md), [architecture](architecture.md), [insertion](insertion.
 
 ## Branches
 
-- **`main`**: published dictation (see releases).
+- **`main`**: published dictation and meeting (see releases).
 - **`work/dictation`**: merged into `main`.
-- **`work/meeting`**: meeting mode wired onto the `main` architecture (direct-to-disk audio capped at 2 h, CRC transcript journal, dictation/preparation/meeting mutual exclusion, foreground service switching from microphone to processing, WAV/Markdown export, Compose UI). Merged into `main` on 3 November 2026 after 168 JVM/Robolectric tests, lint and debug/release builds.
+- **`work/meeting`**: meeting mode wired onto the `main` architecture. Merged into `main` on 3 November 2026 after 168 JVM/Robolectric tests, lint and debug/release builds.
 - **`work/meeting-core`**: earlier meeting core, kept in the private archive only; superseded by `work/meeting`.
 
 ## Open review points
@@ -80,11 +99,12 @@ See the [scope](mvp.md), [architecture](architecture.md), [insertion](insertion.
 1. Insertion: the remaining risks listed in `insertion.md` (composition set before input started and never reported, web fields, recreated editors, Android 29–32).
 2. Microphone FGS armed from a visible activity, microphone closed at rest, stop/revocation/mute/notification reachable. No service silently recreated from an old command. Applies to both `DictationService` and `MeetingService`.
 3. Meeting: background recording endurance (screen off, lock, phone call, another app taking the microphone), post-recording transcription time, RAM, heat and battery on the Pixel.
+4. Dependencies (Kotlin 2.1.0, Compose BOM 2025.01.01, Robolectric 4.14.1, target SDK 35…) are pinned but about two years old. Upgrade only after the next phone session, one group per commit; raising `targetSdk` or changing sherpa-onnx needs a maintainer decision and its own phone check. An automated update notifier (Dependabot or Renovate) is a maintainer decision.
 
 ## Validation
 
-See [ci.md](ci.md#local-build): JVM/Robolectric tests, lint, debug and release builds, Python release-tooling tests. About 5 minutes per full build on a small VPS; avoid parallel builds when RAM is limited.
+See [ci.md](ci.md#local-build): JVM/Robolectric tests, lint, debug and release builds, Python release-tooling tests. About 6 minutes per full build on a small VPS; avoid parallel builds when RAM is limited.
 
 ## Not verified on a phone yet
 
-Insertion in apps other than Keep and one messaging app, web fields, English quality, 15-minute dictations, keeping the FGS/microphone across app switches and screen lock, airplane mode then return of connectivity, memory, latency, battery and heat, Android 29–32, the whole meeting mode. Host tests are never presented as phone results.
+Everything listed in the next phone session; insertion in apps other than Keep and one messaging app, web fields, English quality, 15-minute dictations, keeping the FGS/microphone across app switches and screen lock, airplane mode then return of connectivity, memory, latency, battery and heat, Android 29–32; in meeting mode, a full 2-hour recording, processing with the screen off, Dutch, export and deletion. Host tests are never presented as phone results.
