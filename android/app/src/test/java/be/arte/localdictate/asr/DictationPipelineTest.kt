@@ -3,6 +3,8 @@ package be.arte.localdictate.asr
 import kotlinx.coroutines.*
 import org.junit.Assert.*
 import org.junit.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 class DictationPipelineTest {
@@ -14,6 +16,73 @@ class DictationPipelineTest {
             return listOfNotNull(previous)
         }
         override fun finish() = listOfNotNull(tail).also { tail = null }
+    }
+    /** Records every sample value it receives; [onAccept] can stall the segmentation thread. */
+    private class RecordingSegmenter(private val onAccept: (Int) -> Unit = {}) : SpeechSegmenter {
+        val received = mutableListOf<Float>()
+        private var calls = 0
+        override fun accept(samples: FloatArray): List<FloatArray> {
+            onAccept(calls++)
+            synchronized(received) { samples.forEach { received += it } }
+            return emptyList()
+        }
+        override fun finish() = emptyList<FloatArray>()
+    }
+    @Test fun manyTinyBlocksSurviveAShortStall() = runBlocking {
+        withTimeout(10_000) {
+            // Non-blocking reads return a few milliseconds each: 400 blocks of 5 ms = 2 s of audio.
+            val segmenter = RecordingSegmenter { call -> if (call == 0) Thread.sleep(300) }
+            var next = 0
+            val failure = DictationPipeline(segmenter, capture = { emit ->
+                repeat(400) { emit(FloatArray(80) { (next++).toFloat() }) }
+            }, stopCapture = {}, recognize = { "" }, onText = {}, onDraining = {},
+                onError = { fail(it) }).run()
+            assertNull(failure)
+            assertEquals(32_000, segmenter.received.size)
+            assertEquals((0 until 32_000).map { it.toFloat() }, segmenter.received)
+        }
+    }
+    @Test fun stallLongerThanTheLimitStopsOnceAndDrainsEveryAcceptedSample() = runBlocking {
+        withTimeout(10_000) {
+            val stopped = AtomicBoolean(false)
+            val release = CountDownLatch(1)
+            val errors = mutableListOf<String>()
+            val segmenter = RecordingSegmenter { call -> if (call == 0) release.await(5, TimeUnit.SECONDS) }
+            var emitted = 0
+            val run = async {
+                DictationPipeline(segmenter, capture = { emit ->
+                    while (!stopped.get()) { emit(FloatArray(80) { (emitted++).toFloat() }); delay(1) }
+                }, stopCapture = { stopped.set(true) }, recognize = { "" }, onText = {}, onDraining = {},
+                    onError = { synchronized(errors) { errors += it } }, maxPendingSamples = 1_600).run()
+            }
+            while (synchronized(errors) { errors.isEmpty() }) delay(5)
+            assertTrue(stopped.get())
+            release.countDown()
+            assertNotNull(run.await())
+            assertEquals(1, errors.size)
+            assertTrue(errors.single().contains("saturée"))
+            assertEquals((0 until emitted).map { it.toFloat() }, segmenter.received)
+        }
+    }
+    @Test fun durationIsPublishedOncePerSecondAndExactlyAtTheEnd() = runBlocking {
+        val durations = mutableListOf<Long>()
+        DictationPipeline(RecordingSegmenter(), capture = { emit ->
+            repeat(481) { emit(FloatArray(100)) } // 48,100 samples = 3006 ms in 5 ms blocks
+        }, stopCapture = {}, recognize = { "" }, onText = {}, onDraining = {}, onError = { fail(it) },
+            onDuration = { durations += it }).run()
+        assertEquals(3006L, durations.last())
+        assertEquals(listOf(6L, 1000L, 2000L, 3000L, 3006L), durations)
+    }
+    @Test fun fifteenMinuteBudgetStillStopsAtNineHundredSeconds() = runBlocking {
+        val stopped = AtomicBoolean(false)
+        val durations = mutableListOf<Long>()
+        DictationPipeline(RecordingSegmenter(), capture = { emit ->
+            while (!stopped.get()) emit(FloatArray(16_000))
+        }, stopCapture = { stopped.set(true) }, recognize = { "" }, onText = {}, onDraining = {},
+            onError = { fail(it) }, onDuration = { durations += it },
+            maxPendingSamples = Long.MAX_VALUE).run() // Faster than real time: the queue limit is tested above.
+        assertEquals(900_000L, durations.last())
+        assertTrue(durations.size <= 902)
     }
     @Test fun finalSegmentIsFlushedAndAcceptedAudioDrainedInOrder() = runBlocking {
         val texts = mutableListOf<String>()
@@ -75,7 +144,7 @@ class DictationPipelineTest {
                 }, stopCapture = { stopped.set(true) }, recognize = {
                     blocked.await(); it.single().toInt().toString()
                 }, onText = { output += it.toInt() }, onDraining = {}, onError = { synchronized(errors) { errors += it } },
-                    pcmCapacity = 1, segmentCapacity = 1).run()
+                    maxPendingSamples = 1, segmentCapacity = 1).run()
             }
             while (synchronized(errors) { errors.isEmpty() }) delay(5)
             assertTrue(stopped.get())
@@ -92,7 +161,7 @@ class DictationPipelineTest {
             val error = DictationPipeline(FixtureSegmenter(), capture = { emit ->
                 while (!stopped.get()) { emit(floatArrayOf(1f)); delay(2) }
             }, stopCapture = { stopped.set(true) }, recognize = { error("Fixture decoder failed") },
-                onText = { fail() }, onDraining = {}, onError = {}, pcmCapacity = 2, segmentCapacity = 2).run()
+                onText = { fail() }, onDraining = {}, onError = {}, maxPendingSamples = 2, segmentCapacity = 2).run()
             assertTrue(stopped.get())
             assertTrue(error!!.contains("incomplète"))
         }

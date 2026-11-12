@@ -2,6 +2,7 @@ package be.arte.localdictate.asr
 
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 /** Longest segment sent to the recognizer: split VAD maximum (20 s, see SpeechSplitter) plus margins, with headroom. */
@@ -24,7 +25,13 @@ class CaptureBudget(private val maxSamples: Long = 16_000L * 60 * 15) {
     }
 }
 
-/** Two independent bounded FIFO queues. On overload stop capture, then drain, without silent loss. */
+/**
+ * Two independent bounded FIFO queues. On overload stop capture, then drain, without silent loss.
+ *
+ * The PCM queue is bounded by audio duration, not by block count: the microphone is polled without blocking and
+ * a block often holds a few milliseconds, so 64 blocks were well under a second of margin (the defect fixed for
+ * meetings in v0.3.4). The segment queue is bounded by content (a segment is up to 25 s).
+ */
 class DictationPipeline(
     private val segmenter: SpeechSegmenter,
     private val capture: suspend ((FloatArray) -> Unit) -> Unit,
@@ -34,12 +41,15 @@ class DictationPipeline(
     private val onDraining: () -> Unit,
     private val onError: (String) -> Unit,
     private val onDuration: (Long) -> Unit = {},
-    private val pcmCapacity: Int = 64,
+    private val maxPendingSamples: Long = 5L * 16_000,
     private val segmentCapacity: Int = 8,
     private val budget: CaptureBudget = CaptureBudget(),
 ) {
+    init { require(maxPendingSamples > 0 && segmentCapacity > 0) }
     suspend fun run(): String? = supervisorScope {
-        val pcm = Channel<FloatArray>(pcmCapacity)
+        // Unlimited in blocks, bounded in samples by the producer below.
+        val pcm = Channel<FloatArray>(Channel.UNLIMITED)
+        val pending = AtomicLong(0)
         val segments = Channel<FloatArray>(segmentCapacity)
         val failure = AtomicReference<String?>(null)
         fun fail(message: String) {
@@ -47,20 +57,28 @@ class DictationPipeline(
             if (failure.compareAndSet(null, message)) onError(message)
         }
         val captureJob = launch(Dispatchers.IO) {
+            var reportedSecond = -1L
             try {
                 capture { samples ->
                     val block = budget.accept(samples)
-                    if (block.isNotEmpty() && !pcm.trySend(block).isSuccess) {
-                        // The caller cannot suspend. Preserve this final block; stop AudioRecord first.
-                        fail("Capture saturée : micro arrêté, traitement du son accepté.")
-                        runBlocking { pcm.send(block) }
+                    if (block.isNotEmpty()) {
+                        // Stop AudioRecord first, then keep the block that crossed the limit: accepted audio is drained.
+                        if (pending.addAndGet(block.size.toLong()) > maxPendingSamples)
+                            fail("Capture saturée : micro arrêté, traitement du son accepté.")
+                        pcm.trySend(block) // Never fails while open: the channel is unlimited.
                     }
-                    onDuration(budget.capturedSamples * 1000 / 16_000)
+                    // Once per displayed second: every change re-renders the bubble and the screen.
+                    val second = budget.capturedSamples / 16_000
+                    if (second != reportedSecond) { reportedSecond = second; onDuration(budget.capturedSamples * 1000 / 16_000) }
                     if (budget.exhausted) stopCapture()
                 }
             } catch (error: CancellationException) { throw error }
             catch (_: Exception) { fail("Capture interrompue : vérifiez le microphone. Le texte reste disponible.") }
-            finally { stopCapture(); pcm.close(); onDraining() }
+            finally {
+                stopCapture(); pcm.close()
+                onDuration(budget.capturedSamples * 1000 / 16_000) // Exact final value (statistics).
+                onDraining()
+            }
         }
         val segmentationJob = launch(Dispatchers.Default) {
             suspend fun send(items: List<FloatArray>) {
@@ -73,7 +91,7 @@ class DictationPipeline(
                 }
             }
             try {
-                for (block in pcm) send(segmenter.accept(block))
+                for (block in pcm) { pending.addAndGet(-block.size.toLong()); send(segmenter.accept(block)) }
                 send(segmenter.finish())
             } catch (error: CancellationException) { throw error }
             catch (_: Exception) {
