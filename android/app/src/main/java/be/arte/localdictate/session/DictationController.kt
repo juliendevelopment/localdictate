@@ -41,6 +41,8 @@ data class DictationState(
     val notice: String? = null,
     /** True once the microphone delivered its first audio in the current dictation. */
     val micLive: Boolean = false,
+    /** Numbers only (delays, levels, segment counts) of the last dictation; memory only, reset at the next tap. */
+    val diagnostic: String? = null,
 )
 
 class DictationController(private val app: Application) {

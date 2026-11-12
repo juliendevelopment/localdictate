@@ -279,6 +279,7 @@ private fun HomeScreen(
                     Phase.PROCESSING -> "micro fermé, traitement et insertion"
                 }, modifier = Modifier.testTag("session-state"))
                 if (state.durationMs > 0) Text("Durée capturée : ${state.durationMs / 1000} s / 900 s")
+                state.diagnostic?.let { Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("session-diagnostic")) }
                 Text(state.message, modifier = Modifier.testTag("session-message"))
                 state.error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("session-error")) }
                 if (state.phase == Phase.OFF) {

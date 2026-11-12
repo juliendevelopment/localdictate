@@ -27,7 +27,7 @@ class MainActivityTest {
     @Before fun cleanState() {
         compose.runOnIdle {
             controller.journal.clear()
-            controller.update { it.copy(transcript = "", error = null, phase = Phase.OFF, preparing = false) }
+            controller.update { it.copy(transcript = "", error = null, phase = Phase.OFF, preparing = false, diagnostic = null) }
         }
     }
     @Test fun launchHasNoAutomaticDownloadMicrophoneOrService() {
@@ -41,6 +41,14 @@ class MainActivityTest {
             assertEquals(PackageManager.PERMISSION_DENIED, compose.activity.checkSelfPermission(Manifest.permission.RECORD_AUDIO))
             assertFalse(java.io.File(compose.activity.filesDir, "models/downloads").exists())
         }
+    }
+    @Test fun dictationDiagnosticIsShownOnlyWhenPresent() {
+        compose.onNodeWithTag("session-diagnostic").assertDoesNotExist()
+        val line = "Diagnostic : micro 180 ms après le toucher • crête −31 dBFS • gain ×6,2 • 0 segment, 0,0 s"
+        compose.runOnIdle { controller.update { it.copy(diagnostic = line) } }
+        compose.onNodeWithTag("session-diagnostic").performScrollTo().assertTextEquals(line)
+        compose.runOnIdle { controller.update { it.copy(diagnostic = null) } }
+        compose.onNodeWithTag("session-diagnostic").assertDoesNotExist()
     }
     @Test fun meetingIsHonestAndNeverStartsAService() {
         compose.onNodeWithTag("mode-meeting").performClick()

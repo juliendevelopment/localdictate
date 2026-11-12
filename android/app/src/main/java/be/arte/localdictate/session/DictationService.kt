@@ -11,6 +11,7 @@ import android.content.pm.ServiceInfo
 import android.os.IBinder
 import android.os.Build
 import android.os.PowerManager
+import android.os.SystemClock
 import android.provider.Settings
 import be.arte.localdictate.DictateApplication
 import be.arte.localdictate.MainActivity
@@ -120,32 +121,22 @@ class DictationService : Service() {
             controller.update { it.copy(message = "Copiez puis désarmez et effacez le texte précédent avant une nouvelle dictée.") }
             return
         }
+        val tapMs = SystemClock.elapsedRealtime()
         cancelRequested = false
-        val targetService = InsertionService.connected
-        val hasTarget = runCatching { targetService?.snapshot() == true }.getOrDefault(false)
-        val startRefusal = if (hasTarget) "" else targetService?.lastRefusal.orEmpty()
+        val diagnostic = DictationDiagnostic(tapMs)
         val recorder = MicrophoneCapture(applicationContext)
         microphone = recorder
-        mediaPauser = MediaPauser(applicationContext).also { it.pause() }
         controller.update { it.copy(phase = Phase.RECORDING, micLive = false, durationMs = 0, error = null, notice = null,
-            message = if (hasTarget) "Dictée locale. Les pauses ne terminent pas la session."
-                else "Aucun champ compatible : la dictée sera copiée dans le presse-papiers à l’arrêt.") }
-        sessionJob = scope.launch {
+            diagnostic = null, message = "Ouverture du micro…") }
+        // Undispatched: everything up to run.await() below runs now, on the main thread, in the tap's frame.
+        sessionJob = scope.launch(start = CoroutineStart.UNDISPATCHED) {
             var id: String? = null
             var detector: SileroSegmenter? = null
+            var targetService: InsertionService? = null
             var completed = false
             try {
-                wakeLock = getSystemService(PowerManager::class.java)
-                    .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "LocalDictate:dictation").apply {
-                        setReferenceCounted(false)
-                        // Bound a stuck native call as well; no lock while merely armed.
-                        acquire(30L * 60 * 1000)
-                    }
-                id = withContext(Dispatchers.IO) { controller.journal.begin().id }
-                val sessionId = id
                 val decoder = checkNotNull(engine)
-                // The microphone opens now; Silero loads on the segmentation thread while PCM waits in the queue,
-                // so the first words spoken right after the tap are kept.
+                // Silero loads on the segmentation thread while PCM waits in the queue.
                 val segmenter = object : SpeechSegmenter {
                     private fun vad() = detector ?: decoder.segmenter().also { detector = it }
                     override fun accept(samples: FloatArray) = vad().accept(samples)
@@ -154,7 +145,7 @@ class DictationService : Service() {
                 var live = false
                 // Soft speech close to the microphone is raised before VAD and ASR; loud speech is left unchanged.
                 val voiceGain = VoiceGain()
-                val failure = DictationPipeline(segmenter,
+                val pipeline = DictationPipeline(segmenter,
                     capture = { emit -> recorder.read(onSilenced = { silenced ->
                         if (silenced) {
                             controller.update { it.copy(phase = Phase.PROCESSING, error = "Microphone rendu muet par Android : dictée à vérifier, copie manuelle requise.") }
@@ -163,19 +154,44 @@ class DictationService : Service() {
                     }, emit = {
                         if (!live) { live = true; controller.update { state -> state.copy(micLive = true) } }
                         val samples = voiceGain.apply(it.samples)
+                        diagnostic.audio(it.originMs, it.samples, voiceGain.gain)
                         bubble?.level(Pcm16.level(samples))
                         emit(samples)
                     }) },
                     stopCapture = recorder::stop,
-                    recognize = { decoder.recognize(it) },
+                    recognize = { samples ->
+                        val begin = SystemClock.elapsedRealtime()
+                        decoder.recognize(samples).also { diagnostic.decoded(samples.size, SystemClock.elapsedRealtime() - begin) }
+                    },
                     onText = { text ->
-                        val record = withContext(Dispatchers.IO) { controller.journal.append(sessionId, text) }
+                        val record = withContext(Dispatchers.IO) { controller.journal.append(checkNotNull(id), text) }
                         controller.update { it.copy(transcript = record.text) }
                     },
                     onDraining = { controller.update { it.copy(phase = Phase.PROCESSING) } },
                     onError = { message -> controller.update { it.copy(phase = Phase.PROCESSING, error = message) } },
                     onDuration = { duration -> controller.update { it.copy(durationMs = duration) } },
-                ).run()
+                    // The journal is opened while the microphone starts; no text is appended before it exists.
+                    start = { id = controller.journal.begin().id },
+                )
+                // The microphone opens now, on its own thread. The target, the media pause and the wake lock follow
+                // while it starts, so the first words spoken right after the tap are captured.
+                val run = async(start = CoroutineStart.UNDISPATCHED) { pipeline.run() }
+                targetService = InsertionService.connected
+                val hasTarget = runCatching { targetService?.snapshot() == true }.getOrDefault(false)
+                val startRefusal = if (hasTarget) "" else targetService?.lastRefusal.orEmpty()
+                mediaPauser = MediaPauser(applicationContext).also { it.pause() }
+                wakeLock = getSystemService(PowerManager::class.java)
+                    .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "LocalDictate:dictation").apply {
+                        setReferenceCounted(false)
+                        // Bound a stuck native call as well; no lock while merely armed.
+                        acquire(30L * 60 * 1000)
+                    }
+                controller.update { if (it.phase != Phase.RECORDING || it.error != null) it else it.copy(
+                    message = if (hasTarget) "Dictée locale. Les pauses ne terminent pas la session."
+                        else "Aucun champ compatible : la dictée sera copiée dans le presse-papiers à l’arrêt.") }
+                val failure = run.await()
+                // The journal could not be opened: the microphone is closed and the error shown; nothing to keep.
+                val sessionId = id ?: return@launch
                 val interrupted = failure != null || controller.state.value.error != null
                 val cancelled = cancelRequested
                 val record = withContext(Dispatchers.IO) { controller.journal.finish(sessionId, interrupted) }
@@ -185,15 +201,16 @@ class DictationService : Service() {
                 if (record.text.isNotBlank()) withContext(Dispatchers.IO) {
                     controller.count(record.text, controller.state.value.durationMs)
                 }
+                val service = targetService
                 val message = when {
                     interrupted -> "Dictée interrompue ou surchargée : vérifiez le texte récupéré, aucun collage automatique."
                     record.text.isBlank() -> "Aucune parole reconnue. Vous pouvez réessayer."
                     cancelled -> "Dictée annulée : rien n’est inséré ni copié."
-                    !hasTarget || targetService !== InsertionService.connected ->
+                    !hasTarget || service == null || service !== InsertionService.connected ->
                         "Pas de champ compatible au démarrage (${startRefusal.ifBlank { "service d’accessibilité non connecté" }})."
                     else -> {
                         val claimed = withContext(Dispatchers.IO) { controller.journal.claimInsertion(sessionId) }
-                        if (claimed) targetService!!.insert(record.text) else "Insertion déjà tentée ou interrompue : vérifiez le champ."
+                        if (claimed) service.insert(record.text) else "Insertion déjà tentée ou interrompue : vérifiez le champ."
                     }
                 }
                 if (message == InsertionService.OBSERVED) {
@@ -226,8 +243,10 @@ class DictationService : Service() {
                 withContext(NonCancellable + Dispatchers.Default) { detector?.close() }
                 targetService?.forget()
                 microphone = null
-                if (!completed && id != null) withContext(NonCancellable + Dispatchers.IO) {
-                    runCatching { controller.journal.finish(id, interrupted = true) }
+                controller.update { it.copy(diagnostic = diagnostic.line()) }
+                val opened = id
+                if (!completed && opened != null) withContext(NonCancellable + Dispatchers.IO) {
+                    runCatching { controller.journal.finish(opened, interrupted = true) }
                 }
                 if (disarming) { graceful = true; stopSelf() }
                 else if (attached) controller.update { it.copy(phase = Phase.ARMED) }

@@ -44,6 +44,11 @@ class DictationPipeline(
     private val maxPendingSamples: Long = 5L * 16_000,
     private val segmentCapacity: Int = 8,
     private val budget: CaptureBudget = CaptureBudget(),
+    /**
+     * Runs alongside the capture (the session journal is opened here while the microphone starts). No text is
+     * passed to [onText] before it succeeds; if it fails, the microphone is stopped and nothing is recognized.
+     */
+    private val start: suspend () -> Unit = {},
 ) {
     init { require(maxPendingSamples > 0 && segmentCapacity > 0) }
     suspend fun run(): String? = supervisorScope {
@@ -55,6 +60,15 @@ class DictationPipeline(
         fun fail(message: String) {
             stopCapture()
             if (failure.compareAndSet(null, message)) onError(message)
+        }
+        val started = async(Dispatchers.IO) {
+            try { start(); true }
+            catch (error: CancellationException) { throw error }
+            catch (_: Exception) {
+                fail("Démarrage de la dictée impossible : micro fermé, rien n’est inséré. Ouvrez LocalDictate.")
+                pcm.cancel(); segments.cancel()
+                false
+            }
         }
         val captureJob = launch(Dispatchers.IO) {
             var reportedSecond = -1L
@@ -101,6 +115,7 @@ class DictationPipeline(
         }
         val asrJob = launch(Dispatchers.Default) {
             try {
+                if (!started.await()) return@launch
                 for (segment in segments) {
                     val text = recognize(segment).trim()
                     if (text.isNotEmpty()) onText(text)
@@ -114,7 +129,7 @@ class DictationPipeline(
                 pcm.cancel(); segments.cancel()
             }
         }
-        try { joinAll(captureJob, segmentationJob, asrJob) }
+        try { joinAll(started, captureJob, segmentationJob, asrJob) }
         finally { stopCapture(); pcm.cancel(); segments.cancel() }
         failure.get()
     }

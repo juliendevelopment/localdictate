@@ -84,6 +84,34 @@ class DictationPipelineTest {
         assertEquals(900_000L, durations.last())
         assertTrue(durations.size <= 902)
     }
+    @Test fun failedStartStopsTheMicrophoneAndRecognizesNothing() = runBlocking {
+        withTimeout(5_000) {
+            val stopped = AtomicBoolean(false)
+            val errors = mutableListOf<String>()
+            val failure = DictationPipeline(FixtureSegmenter(), capture = { emit ->
+                while (!stopped.get()) { emit(floatArrayOf(1f)); delay(1) }
+            }, stopCapture = { stopped.set(true) }, recognize = { "mot" }, onText = { fail("No text without a journal") },
+                onDraining = {}, onError = { synchronized(errors) { errors += it } },
+                start = { error("Previous dictation not cleared") }).run()
+            assertTrue(stopped.get())
+            assertNotNull(failure)
+            assertEquals(1, errors.size)
+            assertTrue(errors.single().contains("rien n’est inséré"))
+        }
+    }
+    @Test fun noTextBeforeTheJournalIsOpenAndNothingLostAfter() = runBlocking {
+        withTimeout(5_000) {
+            val opened = AtomicBoolean(false)
+            val texts = mutableListOf<String>()
+            val failure = DictationPipeline(FixtureSegmenter(), capture = { emit ->
+                repeat(4) { emit(floatArrayOf(it.toFloat())) }
+            }, stopCapture = {}, recognize = { it.single().toInt().toString() },
+                onText = { assertTrue(opened.get()); texts += it }, onDraining = {}, onError = { fail(it) },
+                start = { delay(200); opened.set(true) }).run()
+            assertNull(failure)
+            assertEquals(listOf("0", "1", "2", "3"), texts)
+        }
+    }
     @Test fun finalSegmentIsFlushedAndAcceptedAudioDrainedInOrder() = runBlocking {
         val texts = mutableListOf<String>()
         var draining = false
