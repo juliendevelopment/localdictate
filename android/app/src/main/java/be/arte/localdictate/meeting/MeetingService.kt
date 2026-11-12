@@ -29,12 +29,13 @@ class MeetingService : Service() {
     @Volatile private var cancelled = false
     @Volatile private var destroyed = false
     @Volatile private var interruption = ""
+    private val stopCause = FirstStopCause()
     private var attached = false
     private var wakeLock: PowerManager.WakeLock? = null
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == STOP) {
-            if (attached) stopOrCancel() else stopSelf()
+            if (attached) stopOrCancel(fromNotification = intent.getBooleanExtra(FROM_NOTIFICATION, false)) else stopSelf()
             return START_NOT_STICKY
         }
         if (attached) return START_NOT_STICKY
@@ -57,13 +58,14 @@ class MeetingService : Service() {
         }
         return START_NOT_STICKY
     }
-    fun stopOrCancel() {
+    fun stopOrCancel(fromNotification: Boolean = false) {
         if (captureStage) {
             stopRequested = true
             processAfterStop = true
             microphone?.stop()
             controller.update { it.copy(message = "Micro fermé ; vidage du son accepté avant transcription.") }
         } else {
+            stopCause.record(if (fromNotification) MeetingStopCause.USER_NOTIFICATION else MeetingStopCause.USER_APP)
             cancelled = true
             microphone?.stop()
             controller.update { it.copy(message = "Annulation demandée ; le décodage natif en cours termine sa sauvegarde. Audio et texte conservés.") }
@@ -137,7 +139,7 @@ class MeetingService : Service() {
             wake(PROCESS_TIMEOUT_MS)
             timer = scope.launch {
                 delay(PROCESS_TIMEOUT_MS)
-                interruption = "Délai de traitement maximal atteint (6 h). Relance explicite possible."
+                stopCause.record(MeetingStopCause.PROCESS_LIMIT)
                 cancelled = true
                 stopSelf() // Do not keep a foreground service past its permitted budget.
             }
@@ -174,7 +176,9 @@ class MeetingService : Service() {
                 diagnostic = checkNotNull(session).diagnostic + " Transcription terminée."))
         } catch (_: CancellationException) {
             session?.let { runCatching { persist(it.copy(phase = MeetingPhase.CANCELLED,
-                diagnostic = it.diagnostic + " Traitement interrompu/annulé. Audio et segments reconnus conservés. " + interruption)) } }
+                diagnostic = listOf(it.diagnostic, stopCause.describe(), "Audio et segments reconnus conservés.",
+                    interruption.takeIf { reason -> reason != stopCause.value?.message }.orEmpty())
+                    .filter { part -> part.isNotBlank() }.joinToString(" "))) } }
         } catch (_: OutOfMemoryError) {
             session?.let { runCatching { persist(it.copy(phase = MeetingPhase.ERROR, diagnostic = it.diagnostic + " Mémoire insuffisante ; audio/journal conservés.")) } }
             controller.update { it.copy(error = "Mémoire insuffisante ; données privées conservées.") }
@@ -217,16 +221,19 @@ class MeetingService : Service() {
     private fun notifyProgress(message: String) = getSystemService(NotificationManager::class.java).notify(NOTIFICATION, notification(message))
     private fun notification(message: String): Notification {
         val open = PendingIntent.getActivity(this, 20, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
-        val stop = PendingIntent.getService(this, 21, Intent(this, MeetingService::class.java).setAction(STOP), PendingIntent.FLAG_IMMUTABLE)
+        val stop = PendingIntent.getService(this, 21, Intent(this, MeetingService::class.java).setAction(STOP)
+            .putExtra(FROM_NOTIFICATION, true), PendingIntent.FLAG_IMMUTABLE)
         return Notification.Builder(this, CHANNEL).setSmallIcon(R.drawable.ic_launcher)
             .setContentTitle("LocalDictate — Réunion").setContentText(message).setOngoing(true).setOnlyAlertOnce(true)
             .setContentIntent(open).addAction(Notification.Action.Builder(null, "Arrêter / annuler", stop).build()).build()
     }
     override fun onTimeout(startId: Int, fgsType: Int) {
-        interruption = "Délai foreground Android atteint ; fichiers conservés."
+        stopCause.record(MeetingStopCause.FOREGROUND_TIMEOUT)
+        interruption = MeetingStopCause.FOREGROUND_TIMEOUT.message // Also shown if this stops a recording.
         cancelled = true; microphone?.stop(); stopSelf()
     }
     override fun onDestroy() {
+        stopCause.record(MeetingStopCause.SERVICE_DESTROYED)
         destroyed = true; cancelled = true
         microphone?.stop()
         wakeLock?.let { if (it.isHeld) it.release() }; wakeLock = null
@@ -240,6 +247,7 @@ class MeetingService : Service() {
     companion object {
         const val START = "be.arte.localdictate.MEETING_START"
         const val STOP = "be.arte.localdictate.MEETING_STOP"
+        private const val FROM_NOTIFICATION = "fromNotification"
         const val CHANNEL = "meeting"
         const val NOTIFICATION = 20
         const val ALERT_CHANNEL = "meeting-alerts"
