@@ -1,0 +1,19 @@
+# Runtime Python packages, pinned with SHA-256 (pip --require-hashes). Linux x86_64/aarch64, CPython 3.12-3.14.
+# PyGObject, GTK 4, libadwaita and GStreamer come from the distribution (installed by the user).
+numpy==2.5.4 \
+    --hash=sha256:fe4d21ab149f15e4e6043dfb0de87e6e5f34ac176cde83060e9802981fca2ac2 \
+    --hash=sha256:fbde6962867ee75b48b0ee29b2b9372ec5d617799dbaf38e82dc0596f2f7738a \
+    --hash=sha256:1c2e71b04c6cad90026e544501bbe0ab9290fa8a4d845e7e8c0d124fb429c988 \
+    --hash=sha256:6ffa07666f8da0eef81d149934a626d0d95fbd6838432a33e66245423a9062c0 \
+    --hash=sha256:4054173604cd8658796053f1f3bc0befb68ec1c0762c57fdad61e199256a8617 \
+    --hash=sha256:d549420b8858885cea8838a727842249218b9c1da24dd517e25c9c7a948310a3
+sherpa-onnx==2.0.1 \
+    --hash=sha256:929f926f9ae1b44263392b4bcfee3fa1e4c7643ee460d93c860e2113260722e9 \
+    --hash=sha256:c7780d8af6921c18e8e920376b32d7707294e5cd3838f4762cf746ab919bcc40 \
+    --hash=sha256:dae9c8972e2dfe1fcaccdc48f7465f0db2e4220f1f7b299b4c0970a5f46c66e2 \
+    --hash=sha256:a52606059a84495374bbd752c8de2b36d3f018cd715eddac559686b4e6868789 \
+    --hash=sha256:3518c926609c2dea384cb0e032f5fc831c69528b7b5cff813487a9b917e9d0a7 \
+    --hash=sha256:634b9dbdc7f789efa4a3273f8fb94ab0480c9cd5e5be0ca2d9a7f0f090c7da3d
+sherpa-onnx-core==2.0.1 \
+    --hash=sha256:4a855a5c89c89885111e4e9c570e5da1aed63373c031b757d8046792d95fe8fe \
+    --hash=sha256:f4ee0ab91c4ae596e0e49d7de32522a946295e038a652f1c1884d89014ee4ec2
