@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name=LocalDictate
+Comment=Dictée locale au raccourci clavier, collée au curseur
+Exec=localdictate
+Icon=be.arte.LocalDictate
+Terminal=false
+Categories=Utility;Accessibility;AudioVideo;
+Keywords=dictée;voix;transcription;dictation;speech;
+StartupNotify=true
+X-GNOME-UsesNotifications=true
+Actions=toggle;
+
+[Desktop Action toggle]
+Name=Démarrer / arrêter la dictée
+Exec=localdictate --toggle
