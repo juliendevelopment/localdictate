@@ -26,6 +26,8 @@ Model weights are not in the repository or the APK: each user downloads them fro
 | sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2 | 487 170 055 | `5793d0fd397c5778d2cf2126994d58e9d56b1be7c04d13c7a15bb1b4eafb16bf` |
 | silero_vad.onnx | 643 854 | `9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6` |
 
+The `asr-models` archive above was **replaced upstream on 7 November 2026** (now 487 211 443 bytes, a new export with a different encoder and decoder), so the Android preparation refuses it (see [status](status.md#known-issues)). The Linux version downloads the same four verified files from the immutable Hugging Face revision [`2bda32ec`](https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/tree/2bda32ec70b097a55adaa07d9a7173915b43cc78) (same CC BY 4.0 model, same exporter); see [linux.md](linux.md#model-sources-13-november-2026).
+
 Hashes and sizes of every extracted file are in `ModelCatalog.kt`, taken from a verification of the real archive. The build re-checks the bytes of the real AAR. JVM fixtures download no model: they build tiny data and real archives, including corrupted and malicious ones, to exercise the same checks.
 
 Relevant Android restrictions: [foreground services and microphone](https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start), [clipboard and focus](https://developer.android.com/about/versions/10/privacy/changes#clipboard-data). Clipboard reads are never needed: automatic insertion uses the public API 33+ editing connection, and the fallback only writes a clip. Overlay access is not used to work around the microphone foreground-service start rules.

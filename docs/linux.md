@@ -40,7 +40,7 @@ PipeWire (or PulseAudio) source. `install.sh` creates a private virtual environm
 copies the code, and adds the `localdictate` command, a menu entry and an icon. `uninstall.sh` removes the
 program and keeps the data (`--all` deletes everything).
 
-1. Open **LocalDictate**, tap **Préparer** (about 488 MB, once; 1.5 GB free needed).
+1. Open **LocalDictate**, tap **Préparer** (about 670 MB, once; 1.5 GB free needed).
 2. Accept the shortcut proposed by the desktop (default suggestion `CTRL+ALT+d`, editable in the window).
 3. In any app, put the cursor in a text field, press the shortcut, speak, press it again. The first paste
    asks the desktop once for virtual keyboard and clipboard access (« Autoriser » in the settings does it
@@ -75,7 +75,7 @@ GlobalShortcuts portal / `localdictate --toggle`
 | `pipeline.py` | Threaded port of `DictationPipeline`: 15-minute budget, bounded queues, overload stops the microphone and drains accepted audio, content-free diagnostic line |
 | `capture.py` | GStreamer device list (`DeviceMonitor`, Audio/Source, monitors excluded) and capture; state changes on a worker thread (a missing PipeWire source blocks 30 s) |
 | `history.py`, `wav.py` | Private history with WAV + transcript + metadata; crash recovery |
-| `models.py` | Same pinned artifacts and checks as Android (HTTPS, resume, Content-Range, allow-listed tar.bz2, quotas, atomic install, versioned marker) |
+| `models.py` | The Parakeet files verified for Android (same SHA-256), downloaded one by one from an immutable Hugging Face revision; Silero from the sherpa-onnx release. HTTPS, resume, strict Content-Range/Length, hash check before install, atomic install, versioned marker |
 | `portals.py`, `paste.py` | Portal clients (Registry, GlobalShortcuts, RemoteDesktop, Clipboard) and delivery with fallbacks |
 | `media.py` | MPRIS pause/resume of other players |
 | `tray.py` | StatusNotifierItem + DBusMenu (no libappindicator), icon names plus generated pixmaps |
@@ -137,6 +137,17 @@ calls), creates a GlobalShortcuts session and binds `toggle` (with the preferred
 (`ConfigureShortcuts`, portal version 2) or rebinds with the new preferred trigger. Without the portal
 (GNOME < 48, X11, others) the window explains how to bind `localdictate --toggle` as a custom shortcut.
 
+### Model sources (13 November 2026)
+
+The first desktop test failed with « Préparation impossible : Unexpected Content-Length »: sherpa-onnx replaced
+its `asr-models` release archive on 7 November 2026 with a new export (487 211 443 bytes; encoder 652 282 294
+and decoder 11 845 274 bytes, different hashes). The size pin refused it, as designed. The Linux app now
+downloads the four Parakeet files from the Hugging Face revision `2bda32ec70b097a55adaa07d9a7173915b43cc78`
+of `csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8` (16 August 2025), whose files have exactly the
+hashes verified for Android; a revision URL cannot change. Silero VAD is still the unchanged file of the
+sherpa-onnx release, checked by hash (a future replacement would be refused the same way). About 670 MB are
+downloaded (uncompressed files). Checked on 13 November 2026 by a real preparation and a French decode.
+
 ## Privacy
 
 Everything lives under `~/.local/share/localdictate` (models, history) and `~/.config/localdictate`
@@ -150,7 +161,7 @@ remove files immediately. Recordings are not encrypted at rest beyond what the u
 Host evidence (VPS without a desktop, microphone or speakers), 12 November 2026:
 
 - 52 unit tests (`python -m unittest discover -s tests -t .` from `linux/`): DSP ports, WAV and crash repair,
-  history, settings, model download/extraction including malicious archives, pipeline (order, limit,
+  history, settings, model download and installation (resume, bad responses, changed upstream file), pipeline (order, limit, burst back-pressure,
   overload, failures, concurrent stop), controller (press/press, cancel, model loading, microphone failure,
   recognition failure, watchdog, re-transcription, pruning) with test doubles.
 - Real engine (`LOCALDICTATE_TEST_MODELS=…`, the pinned files): French, 1 s pause, English through the real
