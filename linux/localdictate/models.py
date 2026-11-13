@@ -1,17 +1,19 @@
 """Explicit model preparation: the only network access of the app.
 
-Same pinned artifacts as the Android app (sizes and SHA-256 from a verification of the real files): HTTPS,
-resumable ``.part`` download with strict Content-Range/Length checks, allow-listed tar+bzip2 extraction with
-quotas, rejection of links/traversals/duplicates, atomic install and a versioned marker. At launch only sizes,
-regular files and the marker are checked; hashes are verified at install.
+The Parakeet files are the ones verified for the Android app (same sizes and SHA-256), downloaded one by one
+from an **immutable** Hugging Face revision of the sherpa-onnx export. The GitHub "asr-models" archive is a
+mutable release asset: it was replaced by a new export on 7 November 2026 (different encoder and decoder), which
+broke the pinned download. Silero VAD still comes from that release (unchanged, checked by SHA-256).
+
+HTTPS, resumable ``.part`` downloads with strict Content-Range/Length checks, a hash check of every file before
+it is installed, an atomic install and a versioned marker. At launch only sizes, regular files and the marker
+are checked.
 """
 from __future__ import annotations
 
-import bz2
 import hashlib
 import os
 import shutil
-import tarfile
 import threading
 import urllib.request
 from dataclasses import dataclass
@@ -29,9 +31,11 @@ class Asset:
 
 
 PARAKEET = "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8"
-ASR_URL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/"
+# Revision of 16 August 2025, whose files match the pinned hashes below (checked on 13 November 2026).
+PARAKEET_REVISION = "2bda32ec70b097a55adaa07d9a7173915b43cc78"
+PARAKEET_URL = f"https://huggingface.co/csukuangfj/{PARAKEET}/resolve/{PARAKEET_REVISION}/"
+VAD_URL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/"
 MIN_FREE_BYTES = 1_500_000_000
-ARCHIVE = Asset(f"{PARAKEET}.tar.bz2", 487_170_055, "5793d0fd397c5778d2cf2126994d58e9d56b1be7c04d13c7a15bb1b4eafb16bf")
 VAD = Asset("silero_vad.onnx", 643_854, "9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6")
 MEMBERS = (
     Asset("encoder.int8.onnx", 652_184_281, "acfc2b4456377e15d04f0243af540b7fe7c992f8d898d751cf134c3a55fd2247"),
@@ -39,7 +43,7 @@ MEMBERS = (
     Asset("joiner.int8.onnx", 6_355_277, "3164c13fc2821009440d20fcb5fdc78bff28b4db2f8d0f0b329101719c0948b3"),
     Asset("tokens.txt", 93_939, "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d"),
 )
-MARKER = "verified-models-v1\n" + "\n".join(f"{a.name}:{a.size}:{a.sha256}" for a in (ARCHIVE, VAD, *MEMBERS))
+MARKER = "verified-models-v2\n" + "\n".join(f"{a.name}:{a.size}:{a.sha256}" for a in (VAD, *MEMBERS))
 CHUNK = 256 * 1024
 
 
@@ -108,96 +112,6 @@ class ModelStore:
     def clear(self) -> None:
         if self.root.exists():
             shutil.rmtree(self.root)
-
-
-def safe_member_path(name: str, prefix: str) -> str:
-    path = name.rstrip("/")
-    parts = path.split("/")
-    if (not path or path.startswith("/") or "\\" in path or ":" in path or "\x00" in path
-            or any(part in ("", ".", "..") for part in parts) or (path != prefix and not path.startswith(prefix + "/"))):
-        raise IntegrityError(f"Unsafe archive path: {name}")
-    return path
-
-
-class _LimitedReader:
-    """Bounds the decompressed stream, including tar metadata, and checks cancellation."""
-
-    def __init__(self, raw, limit: int, cancel: threading.Event | None):
-        self.raw, self.remaining, self.cancel = raw, limit, cancel
-
-    def read(self, size: int = -1) -> bytes:
-        if self.cancel is not None and self.cancel.is_set():
-            raise Cancelled()
-        data = self.raw.read(size if size >= 0 else CHUNK)
-        self.remaining -= len(data)
-        if self.remaining < 0:
-            raise IntegrityError("Expanded archive limit exceeded")
-        return data
-
-
-def extract_archive(archive: Path, destination: Path, prefix: str = PARAKEET, members: Iterable[Asset] = MEMBERS,
-                    on_fraction: Callable[[float], None] = lambda f: None, cancel: threading.Event | None = None,
-                    unlisted_budget: int = 128_000_000) -> None:
-    members = tuple(members)
-    if destination.exists():
-        raise IntegrityError("Extraction destination must be fresh")
-    destination.mkdir(parents=True, mode=0o700)
-    expected = {f"{prefix}/{a.name}": a for a in members}
-    expected_bytes = sum(a.size for a in members)
-    seen: set[str] = set()
-    extracted = skipped = entries = 0
-    try:
-        with open(archive, "rb") as raw, bz2.BZ2File(raw) as decompressed:
-            limited = _LimitedReader(decompressed, expected_bytes + unlisted_budget + 4_000_000, cancel)
-            with tarfile.open(fileobj=limited, mode="r|") as tar:
-                for info in tar:
-                    entries += 1
-                    if entries > 4096:
-                        raise IntegrityError("Too many archive entries")
-                    name = safe_member_path(info.name, prefix)
-                    if info.isdir():
-                        if info.size != 0:
-                            raise IntegrityError("Nonempty directory entry")
-                        continue
-                    if not info.isreg() or info.sparse is not None:
-                        raise IntegrityError(f"Unsupported archive entry: {name}")
-                    asset = expected.get(name)
-                    source = tar.extractfile(info)
-                    if source is None:
-                        raise IntegrityError(f"Unreadable archive entry: {name}")
-                    if asset is None:
-                        # Upstream ships test_wavs: discarded, never installed.
-                        if info.size > 32_000_000 or info.size > unlisted_budget - skipped:
-                            raise IntegrityError("Unlisted archive entry exceeds size budget")
-                        skipped += info.size
-                        while source.read(CHUNK):
-                            pass
-                        continue
-                    if name in seen or info.size != asset.size:
-                        raise IntegrityError(f"Duplicate or wrong-sized model: {name}")
-                    seen.add(name)
-                    digest = hashlib.sha256()
-                    written = 0
-                    fd = os.open(destination / asset.name, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-                    with os.fdopen(fd, "wb") as output:
-                        while chunk := source.read(CHUNK):
-                            if written + len(chunk) > asset.size:
-                                raise IntegrityError("Oversized model")
-                            output.write(chunk)
-                            digest.update(chunk)
-                            written += len(chunk)
-                            extracted += len(chunk)
-                            on_fraction(extracted / expected_bytes)
-                        output.flush()
-                        os.fsync(output.fileno())
-                    if written != asset.size or digest.hexdigest() != asset.sha256:
-                        raise IntegrityError(f"Invalid extracted model: {asset.name}")
-        if seen != set(expected):
-            raise IntegrityError("Archive is missing required models")
-        on_fraction(1.0)
-    except BaseException:
-        shutil.rmtree(destination, ignore_errors=True)
-        raise
 
 
 class Downloader:
@@ -274,36 +188,32 @@ class Progress:
 
 
 def prepare(store: ModelStore, cancel: threading.Event, on_progress: Callable[[Progress], None],
-            downloader: Downloader | None = None, base_url: str = ASR_URL, archive: Asset = ARCHIVE,
-            vad: Asset = VAD) -> ModelFiles:
+            downloader: Downloader | None = None, parakeet_url: str = PARAKEET_URL, vad_url: str = VAD_URL) -> ModelFiles:
     """Downloads, verifies and installs the models. Raises Cancelled, IntegrityError or OSError."""
     if store.ready():
         return store.files()
     store.root.mkdir(parents=True, exist_ok=True, mode=0o700)
     store.downloads.mkdir(parents=True, exist_ok=True, mode=0o700)
     free = shutil.disk_usage(store.root).free
+    needed = sum(a.size for a in store.members) + store.vad.size
     if free < MIN_FREE_BYTES:
         raise OSError(f"Espace disque insuffisant : {free // 1_000_000} Mo libres, 1500 Mo nécessaires.")
     downloader = downloader or Downloader(cancel)
-    total = archive.size + vad.size
-    archive_path = store.downloads / archive.name
-    vad_path = store.downloads / vad.name
-
-    def report(label: str, done: int) -> None:
-        on_progress(Progress(label, min(1.0, done / total)))
-
-    downloader.fetch(base_url + archive.name, archive, archive_path, lambda n: report("Téléchargement du modèle Parakeet", n))
-    downloader.fetch(base_url + vad.name, vad, vad_path, lambda n: report("Téléchargement de Silero VAD", archive.size + n))
+    plan = [(parakeet_url + a.name, a, "Téléchargement du modèle Parakeet") for a in store.members]
+    plan.append((vad_url + store.vad.name, store.vad, "Téléchargement de Silero VAD"))
+    done_before = 0
+    for url, asset, label in plan:
+        downloader.fetch(url, asset, store.downloads / asset.name,
+                         lambda n, base=done_before, label=label: on_progress(Progress(label, min(1.0, (base + n) / needed))))
+        done_before += asset.size
+    on_progress(Progress("Installation", None))
     staging = store.root / "staging"
     shutil.rmtree(staging, ignore_errors=True)
-    staging.mkdir(mode=0o700)
-    extract_archive(archive_path, staging / store.directory, store.directory, store.members,
-                    lambda f: on_progress(Progress("Extraction et vérification", f)), cancel)
-    shutil.copyfile(vad_path, staging / vad.name)
-    if not verified(staging / vad.name, vad, cancel):
-        raise IntegrityError("Checksum mismatch: silero_vad.onnx")
-    marker = staging / ".ready"
-    marker.write_text(store.marker, encoding="utf-8")
+    (staging / store.directory).mkdir(parents=True, mode=0o700)
+    for asset in store.members:
+        os.replace(store.downloads / asset.name, staging / store.directory / asset.name)
+    os.replace(store.downloads / store.vad.name, staging / store.vad.name)
+    (staging / ".ready").write_text(store.marker, encoding="utf-8")
     old = store.root / "old"
     shutil.rmtree(old, ignore_errors=True)
     if store.installed.exists():

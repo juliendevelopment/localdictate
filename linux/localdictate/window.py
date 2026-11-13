@@ -127,7 +127,7 @@ class MainWindow(Adw.ApplicationWindow):
         model = Adw.PreferencesGroup(
             title="Modèle de reconnaissance",
             description="Parakeet TDT 0.6B v3 (NVIDIA, CC BY 4.0) et Silero VAD (MIT), exécutés sur cet ordinateur. "
-                        "Seule la préparation utilise le réseau : environ 488 Mo téléchargés, 640 Mo installés.")
+                        "Seule la préparation utilise le réseau : environ 670 Mo téléchargés une seule fois.")
         self.model_row = Adw.ActionRow(title="Modèle", subtitle="", use_markup=False)
         self.model_row.set_subtitle_lines(3)
         self.prepare_button = Gtk.Button(label="Préparer", valign=Gtk.Align.CENTER)

@@ -83,5 +83,5 @@ command -v update-desktop-database >/dev/null && update-desktop-database "$prefi
 
 echo
 echo "Installé. Lancez « LocalDictate » depuis le menu des applications (ou la commande localdictate),"
-echo "puis « Préparer » pour télécharger le modèle (environ 488 Mo, une seule fois)."
+echo "puis « Préparer » pour télécharger le modèle (environ 670 Mo, une seule fois)."
 case ":$PATH:" in *":$bin:"*) ;; *) echo "Note : ajoutez $bin à votre PATH pour la commande localdictate.";; esac
