@@ -9,6 +9,9 @@ LocalDictate's own code is licensed under the Apache License 2.0 (see `LICENSE`)
 | Silero VAD | Silero Team, MIT | [License](https://github.com/snakers4/silero-vad/blob/066409f3d9db45a30d21dfcbf9147826ffdd7052/LICENSE) |
 | Native ONNX Runtime linked in sherpa | Microsoft, MIT | [License](https://github.com/microsoft/onnxruntime/blob/main/LICENSE) |
 | Commons Compress 1.28.0 | Apache Software Foundation, Apache 2.0 | [License and notice](https://github.com/apache/commons-compress/tree/rel/commons-compress-1.28.0) |
+| numpy 2.5.4 (Linux) | NumPy developers, BSD 3-Clause (wheels bundle OpenBLAS, BSD) | [License](https://github.com/numpy/numpy/blob/main/LICENSE.txt) |
+| sherpa-onnx / sherpa-onnx-core 2.0.1 Python wheels (Linux) | k2-fsa and contributors, Apache 2.0; bundle ONNX Runtime (MIT) | [PyPI](https://pypi.org/project/sherpa-onnx/2.0.1/) |
+| PyGObject, GTK 4, libadwaita, GStreamer (Linux, from the distribution, not redistributed) | LGPL 2.1+ | [PyGObject](https://gitlab.gnome.org/GNOME/pygobject), [GTK](https://gitlab.gnome.org/GNOME/gtk), [libadwaita](https://gitlab.gnome.org/GNOME/libadwaita), [GStreamer](https://gstreamer.freedesktop.org/) |
 | Kotlin/coroutines, AndroidX/Compose | JetBrains, Google and contributors, Apache 2.0 | [Kotlin](https://github.com/JetBrains/kotlin/blob/master/license/LICENSE.txt), [AndroidX](https://android.googlesource.com/platform/frameworks/support/+/androidx-main/LICENSE.txt) |
 
 The NVIDIA model card explicitly covers French and English, automatic language identification, punctuation and capitalization. It is not a measurement of this integration on a phone.

@@ -17,6 +17,10 @@ Status: early but working. Dictation has been tested by the maintainer on a Pixe
 
 Nothing is ever overwritten: insertion only happens at a collapsed cursor in the same field, never into password fields. If the text cannot be inserted, it is copied to the clipboard (replacing the previous clip) and the last five dictations are always available in the app. On Android 10–12 the text is copied instead of inserted.
 
+## Linux
+
+A desktop version lives in [`linux/`](linux/): press a configurable shortcut to start dictating, press it again to stop and paste the text into the focused window. Same local engine and models; each dictation keeps its recording in a private history; microphone, gain and speech detection are adjustable; music is paused while you speak, and a status icon (KDE tray, GNOME top bar) gives access to the settings and to the folder of recordings and texts. Install with `linux/install.sh` (per user, no root). It targets GNOME and KDE through the XDG portals and is **not yet tested on a real desktop**; see [docs/linux.md](docs/linux.md).
+
 ## Privacy
 
 No model weights in the repository or APK. Network is used only by the explicit model preparation, with pinned sizes and SHA-256. Accessibility is used only to find the focused field when you start a dictation and to insert the text when you finish; screens are not read or logged. Recognized text stays in app-private storage; audio is never saved.
@@ -35,7 +39,7 @@ ANDROID_HOME=/path/to/sdk ./gradlew --no-daemon --max-workers=1 --console=plain 
 
 ## Documentation
 
-[Status and releases](docs/status.md) · [Architecture](docs/architecture.md) · [Text insertion: design and field tests](docs/insertion.md) · [Scope](docs/mvp.md) · [Manual phone test plan](docs/acceptation-pixel.md) · [Models and licenses](docs/licences.md) · [Build and CI](docs/ci.md) · [References](docs/references.md)
+[Status and releases](docs/status.md) · [Linux version](docs/linux.md) · [Architecture](docs/architecture.md) · [Text insertion: design and field tests](docs/insertion.md) · [Scope](docs/mvp.md) · [Manual phone test plan](docs/acceptation-pixel.md) · [Models and licenses](docs/licences.md) · [Build and CI](docs/ci.md) · [References](docs/references.md)
 
 The app's interface is in French.
 

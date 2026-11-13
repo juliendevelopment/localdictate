@@ -20,6 +20,12 @@ Verified on the phone:
 
 Insertion used to fail because of a design error (requiring a "frozen world" during the dictation), fixed by the v0.1.8 redesign. Full analysis, version-by-version test log, current rules and how to read the messages: **[insertion.md](insertion.md)**.
 
+## Linux version
+
+A Linux desktop port of the dictation lives in `linux/` (Python, GTK 4/libadwaita, GStreamer, sherpa-onnx 2.0.1, same pinned models): global shortcut (press to start, press to stop and paste), adjustable microphone (device, gain, automatic gain, speech detection threshold, level test), clipboard + Ctrl+V through the XDG portals, private history keeping each recording. Maintainer decisions, architecture and evidence: [linux.md](linux.md). **Host-tested only** (12 November 2026): 52 unit tests, the real engine on FR/EN WAVs, the portal clients against a fake portal, the app under GTK Broadway. Not yet run on a real desktop.
+
+**Precise next action (Linux):** the [desktop test plan](linux.md#desktop-test-plan-next-action) on the maintainer's machine, reporting the desktop (GNOME/KDE, Wayland/X11), the shortcut line and the « Dernière dictée » diagnostic. Then: meeting mode, packaging.
+
 ## Next phone session
 
 **Precise next action.** One sitting of about 30 minutes on the Pixel, with the v0.3.8 APK from the GitHub release. Steps and boxes: [acceptation-pixel.md](acceptation-pixel.md). For each step, if something fails, report the « Diagnostic : … » line and the message under « Durée capturée » (dictation), or the state and message in the « Réunion » tab (meeting).
@@ -84,6 +90,8 @@ Procedure: [ci.md](ci.md#releases). Never move a tag whose release exists. Versi
 - Dictation up to 15 minutes (typical use: 5 to 10), not ended by silence: bubble, user start/stop, then insertion at the cursor; overlay and accessibility accepted, the user's keyboard kept. Several dictations in a row, in as many apps as possible.
 - **Never lose a dictation**: on failure, automatic copy to the clipboard (accepted even though it replaces the previous clip) and history in the app.
 - Separate mode: meeting or long spoken notes up to 2 hours, recording then a complete local transcript (FR/EN first, NL too). No in-app summary: the user copies or exports the transcript to the LLM of their choice.
+
+Linux desktop (12 November 2026): same engine and principles, a configurable global shortcut instead of the bubble (press to start, press to stop and paste), recordings kept in the history, adjustable microphone, paste through clipboard + Ctrl+V (a selection in the target is replaced). Dictation first; meeting mode later. See [linux.md](linux.md).
 
 See the [scope](mvp.md), [architecture](architecture.md), [insertion](insertion.md), [CI](ci.md) and [phone test plan](acceptation-pixel.md).
 

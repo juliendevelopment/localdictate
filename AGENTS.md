@@ -1,6 +1,6 @@
 # LocalDictate — project rules
 
-Read `docs/mvp.md`, `docs/architecture.md`, `docs/ci.md` and `docs/status.md` before any implementation, and `docs/insertion.md` before touching insertion (phone test log and the reasons behind each rule). The goal is local FR/EN dictation, plus a second meeting mode.
+Read `docs/mvp.md`, `docs/architecture.md`, `docs/ci.md` and `docs/status.md` before any implementation, and `docs/insertion.md` before touching insertion (phone test log and the reasons behind each rule). For the Linux desktop version (`linux/`), read `docs/linux.md`: it records where the maintainer adapted these invariants (recordings kept in the history, paste by clipboard + Ctrl+V which replaces a selection). The goal is local FR/EN dictation, plus a second meeting mode.
 
 ## Invariants
 
@@ -15,7 +15,8 @@ Read `docs/mvp.md`, `docs/architecture.md`, `docs/ci.md` and `docs/status.md` be
 
 ## Conventions
 
-- Code and documentation in English; the app's interface is in French. Kotlin/Compose in `android/`, docs in `docs/`, workflows at the root.
+- Code and documentation in English; the app's interface is in French. Kotlin/Compose in `android/`, Python/GTK 4 in `linux/`, docs in `docs/`, workflows at the root.
+- Linux: Python 3.12–3.14, runtime wheels pinned with hashes in `linux/requirements.lock`; system PyGObject/GTK/GStreamer. Tests: `python -m unittest discover -s tests -t .` from `linux/`; the real-engine test needs `LOCALDICTATE_TEST_MODELS`. A host test proves neither the portals on a real desktop nor paste in other apps.
 - JDK 17, pinned wrapper and dependencies. Use the wrapper, not a global Gradle.
 - Small commits `type: description`. Push only this project's content.
 - After a change: JVM tests, real activity under Robolectric, lint and APK; green CI for the exact SHA. A host test proves neither JNI, insertion in other apps, nor endurance on a phone.
