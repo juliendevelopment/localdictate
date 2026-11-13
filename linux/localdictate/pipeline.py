@@ -203,19 +203,17 @@ class DictationPipeline:
 
     # Workers ---------------------------------------------------------------------------------------------------
     def _send(self, items: list[np.ndarray]) -> None:
+        # Back-pressure, not failure: a burst of segments (audio queued while the model loads, a slow CPU) waits
+        # here, the PCM queue grows, and only its 60 s bound declares an overload.
         for item in items:
             if item.size > MAX_SEGMENT_SAMPLES:
                 raise RuntimeError("Segment VAD trop long")
-            try:
-                self._segments.put_nowait(item)
-            except queue.Full:
-                self.fail("Transcription en retard : micro arrêté, les segments acceptés sont transcrits.")
-                while not self._abort.is_set():
-                    try:
-                        self._segments.put(item, timeout=0.2)
-                        break
-                    except queue.Full:
-                        continue
+            while not self._abort.is_set():
+                try:
+                    self._segments.put(item, timeout=0.2)
+                    break
+                except queue.Full:
+                    continue
 
     def _segment_loop(self) -> None:
         try:

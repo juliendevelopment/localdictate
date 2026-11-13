@@ -77,6 +77,15 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(len(texts), 2)
         self.assertIn("saturée", errors[0])
 
+    def test_burst_of_segments_waits_instead_of_failing(self):
+        pipeline, stopped, texts, errors = make(engine=CountingEngine(delay=0.01), segment_capacity=2)
+        for _ in range(20):
+            pipeline.feed(np.zeros(1600, dtype=np.float32))
+        self.assertFalse(stopped.is_set())
+        pipeline.stop_capture()
+        self.assertTrue(pipeline.wait(10))
+        self.assertEqual((len(texts), errors, pipeline.failure), (20, [], None))
+
     def test_recognizer_failure_keeps_previous_text(self):
         pipeline, stopped, texts, errors = make(engine=CountingEngine(fail_at=3))
         for _ in range(6):
