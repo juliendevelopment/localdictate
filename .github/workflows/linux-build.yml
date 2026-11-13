@@ -1,0 +1,41 @@
+name: Linux Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: linux
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install system packages (PyGObject, GTK 4, libadwaita, GStreamer, D-Bus)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends python3-venv python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 \
+            gir1.2-gstreamer-1.0 gstreamer1.0-plugins-base gstreamer1.0-pipewire dbus-daemon
+      - name: Check scripts
+        run: sh -n install.sh && sh -n uninstall.sh
+      - name: Install into a throwaway HOME (pinned, hash-checked wheels)
+        run: |
+          export HOME="$RUNNER_TEMP/home"
+          mkdir -p "$HOME"
+          ./install.sh
+          "$HOME/.local/bin/localdictate" --version
+      - name: Unit tests (host only, no model, microphone or desktop)
+        run: |
+          "$RUNNER_TEMP/home/.local/share/localdictate-app/venv/bin/python" -W ignore -m unittest discover -s tests -t . -v
