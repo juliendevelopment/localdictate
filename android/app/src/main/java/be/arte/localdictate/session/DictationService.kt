@@ -85,7 +85,7 @@ class DictationService : Service() {
                 try {
                     withContext(Dispatchers.Default) {
                         // Assign inside the block so cancellation cannot lose a returned native handle.
-                        engine = LocalRecognizer(controller.models.modelFiles).also { it.load() }
+                        engine = LocalRecognizer(controller.models.modelFiles, controller.models.bpeVocab).also { it.load() }
                     }
                     controller.update { it.copy(phase = Phase.ARMED, message = "Bulle prête. Touchez un champ, puis la bulle pour dicter. Micro fermé.") }
                 } catch (_: CancellationException) { /* onDestroy releases handles after load has unwound */ }
@@ -136,6 +136,8 @@ class DictationService : Service() {
             var completed = false
             try {
                 val decoder = checkNotNull(engine)
+                // Read once per dictation, from memory: an edit saved during a dictation applies to the next one.
+                val vocabulary = controller.vocabulary
                 // Silero loads on the segmentation thread while PCM waits in the queue.
                 val segmenter = object : SpeechSegmenter {
                     private fun vad() = detector ?: decoder.segmenter().also { detector = it }
@@ -161,7 +163,7 @@ class DictationService : Service() {
                     stopCapture = recorder::stop,
                     recognize = { samples ->
                         val begin = SystemClock.elapsedRealtime()
-                        decoder.recognize(samples).also { diagnostic.decoded(samples.size, SystemClock.elapsedRealtime() - begin) }
+                        decoder.recognize(samples, vocabulary).also { diagnostic.decoded(samples.size, SystemClock.elapsedRealtime() - begin) }
                     },
                     onText = { text ->
                         val record = withContext(Dispatchers.IO) { controller.journal.append(checkNotNull(id), text) }

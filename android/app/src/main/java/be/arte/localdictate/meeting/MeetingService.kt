@@ -148,11 +148,12 @@ class MeetingService : Service() {
             check(dictation.models.isReady()) // No prepare/download from this service.
             persist(checkNotNull(session).copy(phase = MeetingPhase.TRANSCRIBING))
             notifyProgress("Transcription locale, micro fermé")
-            engine = LocalRecognizer(dictation.models.modelFiles)
+            engine = LocalRecognizer(dictation.models.modelFiles, dictation.models.bpeVocab)
             engine.load()
             if (cancelled || destroyed) throw CancellationException()
             vad = engine.segmenter()
             val decoder = engine
+            val vocabulary = dictation.vocabulary
             val detector = vad
             persist(repository.newJournal(checkNotNull(session)).copy(phase = MeetingPhase.TRANSCRIBING))
             var lastSaved = 0L
@@ -160,7 +161,7 @@ class MeetingService : Service() {
                 MeetingTranscriber().transcribe(repository.audio(checkNotNull(session).id), journal, object : MeetingDecoder {
                     override fun accept(samples: FloatArray) = detector.acceptTimed(samples).map { MeetingSpeech(it.startSample, it.samples) }
                     override fun finish() = detector.finishTimed().map { MeetingSpeech(it.startSample, it.samples) }
-                    override fun recognize(samples: FloatArray) = decoder.recognize(samples)
+                    override fun recognize(samples: FloatArray) = decoder.recognize(samples, vocabulary)
                     override fun close() = Unit // Service owns both native handles through the finally below.
                 }, cancelled = { cancelled || destroyed }, progress = { ms ->
                     controller.update { it.copy(processedMs = ms) }

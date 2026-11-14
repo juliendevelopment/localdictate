@@ -42,6 +42,23 @@ class MainActivityTest {
             assertFalse(java.io.File(compose.activity.filesDir, "models/downloads").exists())
         }
     }
+    @Test fun vocabularyIsSavedPrivatelyAndParsedForTheNextDictation() {
+        compose.runOnIdle { controller.saveVocabulary("") }
+        compose.onNodeWithTag("vocabulary-save").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithTag("vocabulary").performScrollTo().performTextInput("Parakeet\npara kit => Parakeet")
+        compose.onNodeWithTag("vocabulary-save").performScrollTo().assertIsEnabled().performClick()
+        compose.runOnIdle {
+            assertEquals("Parakeet\npara kit => Parakeet",
+                java.io.File(compose.activity.filesDir, "dictation/vocabulary.txt").readText())
+            assertEquals(listOf("Parakeet"), controller.vocabulary.hotwords)
+            assertEquals("le modèle Parakeet", controller.vocabulary.apply("le modèle para kit"))
+            assertTrue(controller.state.value.message.startsWith("Mots enregistrés : 1 mot(s) favori(s), 1 remplacement(s)."))
+        }
+        compose.onNodeWithTag("vocabulary-save").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithTag("mode-meeting").performScrollTo().performClick()
+        compose.onNodeWithTag("vocabulary").assertDoesNotExist()
+        compose.runOnIdle { controller.saveVocabulary("") }
+    }
     @Test fun dictationDiagnosticIsShownOnlyWhenPresent() {
         compose.onNodeWithTag("session-diagnostic").assertDoesNotExist()
         val line = "Diagnostic : micro 180 ms après le toucher • crête −31 dBFS • gain ×6,2 • 0 segment, 0,0 s"

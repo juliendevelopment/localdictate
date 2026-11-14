@@ -72,6 +72,7 @@ class MainActivity : ComponentActivity() {
                     disarm = { controller.service?.disarm() }, copy = model.controller::copy, clear = model.controller::clear,
                     copyText = model.controller::copyText, clearHistory = model.controller::clearHistory,
                     clearStats = model.controller::clearStats,
+                    saveVocabulary = model.controller::saveVocabulary,
                     showBubble = { controller.service?.showBubble() },
                     startMeeting = ::startMeeting,
                     stopMeeting = ::stopMeeting,
@@ -146,6 +147,7 @@ private fun HomeScreen(
     microphone: () -> Unit, notifications: () -> Unit, overlay: () -> Unit, accessibility: () -> Unit,
     arm: () -> Unit, stop: () -> Unit, disarm: () -> Unit, copy: () -> Unit, clear: () -> Unit,
     copyText: (String) -> Unit, clearHistory: () -> Unit, clearStats: () -> Unit = {}, showBubble: () -> Unit = {},
+    saveVocabulary: (String) -> Unit = {},
     startMeeting: () -> Unit, stopMeeting: () -> Unit,
     processMeeting: (String) -> Unit, selectMeeting: (String) -> Unit,
     unselectMeeting: () -> Unit, deleteMeeting: (String) -> Unit, copyMeeting: (String) -> Unit,
@@ -329,6 +331,10 @@ private fun HomeScreen(
                 Text("Comptées sur ce téléphone uniquement, sans garder les textes.")
                 TextButton(onClick = clearStats, modifier = Modifier.testTag("stats-clear")) { Text("Effacer les statistiques") }
             }
+            if (!meeting) {
+                HorizontalDivider()
+                VocabularySection(state.vocabulary, saveVocabulary)
+            }
             Text("Pas de cloud, pas d’analytics. Aucun enregistrement automatique. Le texte reconnu reste ici jusqu’à Effacer ; le son n’est pas sauvegardé.")
             TextButton(onClick = { licenses = true }, modifier = Modifier.testTag("licenses")) { Text("Modèles, licences et limites") }
         }
@@ -354,7 +360,7 @@ private fun HomeScreen(
     if (licenses) AlertDialog(onDismissRequest = { licenses = false }, title = { Text("Reconnaissance locale") },
         text = { Column(Modifier.verticalScroll(rememberScrollState())) {
             Text("Parakeet TDT 0.6B v3 — NVIDIA, CC BY 4.0. Conversion ONNX int8 distribuée par k2-fsa/sherpa-onnx. Détection automatique FR/EN, ponctuation et majuscules selon la fiche NVIDIA. Aucune traduction ni reformulation.")
-            Text("sherpa-onnx 2.0.1 — Apache 2.0 ; Silero VAD — Silero Team, MIT ; ONNX Runtime natif — Microsoft, MIT ; Commons Compress — Apache 2.0.")
+            Text("sherpa-onnx 2.0.1 — Apache 2.0 ; Silero VAD — Silero Team, MIT ; ONNX Runtime natif — Microsoft, MIT.")
             TextButton(onClick = { licenses = false; notices = true }) { Text("Lire les notices complètes") }
             Text("La qualité, la mémoire et le délai sur Pixel restent à vérifier sur téléphone. L’armement garde un service microphone visible ; seul le toucher de la bulle ouvre AudioRecord.")
         } }, confirmButton = { TextButton(onClick = { licenses = false }) { Text("Fermer") } })
@@ -372,6 +378,20 @@ internal fun weekLine(week: WeekStats): String {
     val words = java.text.NumberFormat.getIntegerInstance(java.util.Locale.FRENCH).format(week.words)
     return "Semaine du ${week.monday.format(weekStart)} : $words mots • $duration • " +
         "${week.dictations} dictée${if (week.dictations > 1) "s" else ""}"
+}
+
+/** The user's words: hotwords for the recognizer and replacements of the recognized text (see Vocabulary). */
+@Composable
+private fun VocabularySection(saved: String, save: (String) -> Unit) {
+    var text by rememberSaveable(saved) { mutableStateOf(saved) }
+    Text("Mes mots", style = MaterialTheme.typography.titleMedium)
+    Text("Un mot ou un nom par ligne pour aider la reconnaissance (exemple : Parakeet). Pour corriger une erreur qui revient toujours : « entendu => voulu » (exemple : para kit => Parakeet). S’applique à la dictée et aux transcriptions de réunion. Reste sur ce téléphone.")
+    OutlinedTextField(value = text, onValueChange = { text = it.take(be.arte.localdictate.asr.Vocabulary.MAX_TEXT_CHARS) },
+        modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp).testTag("vocabulary"),
+        placeholder = { Text("Parakeet\npara kit => Parakeet") })
+    Button(onClick = { save(text) }, enabled = text != saved, modifier = Modifier.testTag("vocabulary-save")) {
+        Text("Enregistrer les mots")
+    }
 }
 
 @Composable

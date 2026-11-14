@@ -1,6 +1,8 @@
 package be.arte.localdictate.session
 
 import android.app.Application
+import be.arte.localdictate.asr.Vocabulary
+import be.arte.localdictate.asr.VocabularyStore
 import be.arte.localdictate.insertion.PrivateClipboard
 import be.arte.localdictate.models.ModelManager
 import kotlinx.coroutines.*
@@ -28,7 +30,7 @@ data class DictationState(
     val recovering: Boolean = false,
     val meetingBusy: Boolean = false,
     val modelsReady: Boolean = false,
-    val preparation: String = "Modèles non préparés — environ 488 Mo à télécharger, 1,5 Go libres requis.",
+    val preparation: String = "Modèles non préparés — environ 670 Mo à télécharger, 1,5 Go libres requis.",
     val progress: Float? = null,
     val transcript: String = "",
     val message: String = "Aucune écoute automatique. Armez la bulle depuis cet écran, puis touchez-la dans le champ cible.",
@@ -43,6 +45,8 @@ data class DictationState(
     val micLive: Boolean = false,
     /** Numbers only (delays, levels, segment counts) of the last dictation; memory only, reset at the next tap. */
     val diagnostic: String? = null,
+    /** The user's words, as typed (see [Vocabulary]). */
+    val vocabulary: String = "",
 )
 
 class DictationController(private val app: Application) {
@@ -50,6 +54,10 @@ class DictationController(private val app: Application) {
     val journal = TranscriptJournal(File(app.filesDir, "dictation/transcript.dat"))
     val historyStore = DictationHistory(File(app.filesDir, "dictation/history.dat"))
     val statsStore = DictationStats(File(app.filesDir, "dictation/stats.dat"))
+    val vocabularyStore = VocabularyStore(File(app.filesDir, "dictation/vocabulary.txt"))
+    /** Parsed list read by the services at the start of a dictation or a transcription (memory, no I/O on the tap). */
+    @Volatile var vocabulary: Vocabulary = Vocabulary.EMPTY
+        private set
     val gate = UseGate()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var preparationJob: Job? = null
@@ -59,6 +67,10 @@ class DictationController(private val app: Application) {
     val state = mutable.asStateFlow()
     init {
         runCatching { historyStore.read() }.onSuccess { items -> update { it.copy(history = items) } }
+        runCatching { vocabularyStore.read() }.onSuccess { text ->
+            vocabulary = Vocabulary.parse(text)
+            update { it.copy(vocabulary = text) }
+        }
         runCatching { statsStore.read() }.onSuccess { weeks -> update { it.copy(stats = weeks) } }
         runCatching { journal.read() }.onSuccess { record ->
             update { it.copy(transcript = record.text, message = when {
@@ -126,6 +138,15 @@ class DictationController(private val app: Application) {
     }
     fun clearStats() {
         runCatching { statsStore.clear() }.onSuccess { update { it.copy(stats = emptyList()) } }
+    }
+    fun saveVocabulary(text: String) {
+        runCatching { vocabularyStore.write(text) }.onSuccess {
+            val parsed = Vocabulary.parse(text)
+            vocabulary = parsed
+            update { it.copy(vocabulary = text.take(Vocabulary.MAX_TEXT_CHARS), error = null,
+                message = "Mots enregistrés : ${parsed.hotwords.size} mot(s) favori(s), ${parsed.replacements.size} remplacement(s). " +
+                    "Appliqués à la prochaine dictée et à la prochaine transcription de réunion.") }
+        }.onFailure { update { state -> state.copy(error = "Impossible d’enregistrer la liste de mots.") } }
     }
     fun clearHistory() {
         runCatching { historyStore.clear() }.onSuccess { update { it.copy(history = emptyList()) } }

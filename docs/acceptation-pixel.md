@@ -22,6 +22,8 @@ Install a signed release APK. Record Android version, device, APK SHA, duration,
 - [ ] Soft, normal and loud voice in one dictation (v0.3.7): all recognized; if soft speech is missed, note the peak and segment count of the diagnostic.
 - [ ] Media playing (music, YouTube, podcast): pauses on the tap, resumes after ✓ and after ✕; nothing starts when nothing was playing (v0.3.6). Note any player that ignores it.
 - [ ] Weekly statistics: a dictation increments the current week; its duration matches « Durée capturée » (v0.2.3).
+- [ ] « Mes mots » (v0.3.9): dictate a sentence with a word it usually gets wrong, note the result; add the word on its own line, « Enregistrer les mots », dictate again. Then a `entendu => voulu` line for an error that comes back the same way. Note whether the diagnostic's decode time grew noticeably compared with v0.3.8, and any word that appears where it was not said.
+- [ ] « Préparer » on a phone or profile without the model (v0.3.9): about 670 MB in five files, ends « Modèles prêts »; after the update, a phone that already had the model shows « Modèles prêts » with no download.
 - [ ] New bubble (v0.2.0): drag onto ✕ hides it, waking/unlocking shows it again, « Afficher la bulle » from the notification; ✕ during dictation inserts nothing and keeps the text in history.
 
 ## Meeting ([meeting.md](meeting.md))
