@@ -8,7 +8,7 @@ The **meeting** mode (sequential 2-hour recording, then local transcript to copy
 
 **v0.3.8** is released (12 November 2026, [release notes](releases/v0.3.8.md)), host-tested only. Seven releases wait for a phone check: they are grouped in the next phone session below.
 
-**v0.3.9** is prepared on `main` (14 November 2026, [release notes](releases/v0.3.9.md)), not released yet: « Mes mots » (the user's hotwords and `entendu => voulu` replacements, maintainer request: the maintainer reports dictation works well apart from a few unknown words) and model preparation from the immutable Hugging Face revision (known issue 0). Host-tested only (JVM/Robolectric tests, lint, debug and release builds, plus the same sherpa-onnx configuration in Python on the FR/EN samples). Precise next action: maintainer's go to tag `android-v0.3.9` once CI is green on that SHA, then steps 0 and 6 of the phone session.
+**v0.3.9** is released (14 November 2026, [release notes](releases/v0.3.9.md)): « Mes mots » (the user's hotwords and `entendu => voulu` replacements, maintainer request: the maintainer reports dictation works well apart from a few unknown words) and model preparation from the immutable Hugging Face revision (known issue 0). Host-tested only (JVM/Robolectric tests, lint, debug and release builds, plus the same sherpa-onnx configuration in Python on the FR/EN samples). Precise next action: steps 0 and 6 of the phone session.
 
 Verified on the phone:
 
@@ -30,7 +30,7 @@ A Linux desktop port of the dictation lives in `linux/` (Python, GTK 4/libadwait
 
 ## Next phone session
 
-**Precise next action.** One sitting of about 30 minutes on the Pixel, with the v0.3.9 APK from the GitHub release (v0.3.8 until it is released). Steps and boxes: [acceptation-pixel.md](acceptation-pixel.md). For each step, if something fails, report the « Diagnostic : … » line and the message under « Durée capturée » (dictation), or the state and message in the « Réunion » tab (meeting).
+**Precise next action.** One sitting of about 30 minutes on the Pixel, with the v0.3.9 APK from the GitHub release. Steps and boxes: [acceptation-pixel.md](acceptation-pixel.md). For each step, if something fails, report the « Diagnostic : … » line and the message under « Durée capturée » (dictation), or the state and message in the « Réunion » tab (meeting).
 
 0. **Model preparation** (v0.3.9): on the updated Pixel, « Modèles prêts » with no download. If a phone or work profile without the model is available, « Préparer » downloads about 670 MB and ends « Modèles prêts ».
 1. **Start of speech and soft speech** (v0.3.7, v0.3.8; items 1 and 2): a short phrase spoken right after the tap, three times; then soft, normal and loud voice in one dictation. Note the diagnostic line each time.
@@ -90,7 +90,7 @@ Procedure: [ci.md](ci.md#releases). Never move a tag whose release exists. Versi
 | 0.3.6 | Other apps' media paused during a dictation (transient audio focus) |
 | 0.3.7 | Dictation: automatic software gain so soft speech close to the microphone is picked up |
 | 0.3.8 | Dictation: microphone opened first on tap, 5 s audio queue, content-free diagnostic line. Meeting: cancellation cause recorded, French states, readable durations. Host-tested only |
-| 0.3.9 | « Mes mots »: user hotwords (beam search) and replacements, dictation and meeting; models downloaded per file from an immutable Hugging Face revision. Prepared, not released |
+| 0.3.9 | « Mes mots »: user hotwords (beam search) and replacements, dictation and meeting; models downloaded per file from an immutable Hugging Face revision. Host-tested only |
 
 ## Agreed scope
 
