@@ -71,7 +71,6 @@ dependencies {
     implementation(libs.activity.compose)
     implementation(files(sherpaAar).builtBy(fetchSherpa))
     implementation(libs.coroutines.android)
-    implementation(libs.commons.compress)
     implementation(libs.lifecycle.viewmodel.compose)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.junit)

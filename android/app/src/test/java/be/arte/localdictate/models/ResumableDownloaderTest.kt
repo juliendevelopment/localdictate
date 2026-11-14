@@ -160,6 +160,34 @@ class ResumableDownloaderTest {
         assertFalse(readyInstallation(root, listOf(asset), asset, "marker", "parakeet"))
     }
 
+    @Test fun legacyMarkerOfTheSameFilesStaysReadyButNothingElse() {
+        val root = directory()
+        File(root, "parakeet").mkdir()
+        File(root, "parakeet/model.bin").writeBytes(bytes)
+        File(root, "model.bin").writeBytes(bytes)
+        File(root, ".ready").writeText("old")
+        assertFalse(readyInstallation(root, listOf(asset), asset, "new", "parakeet"))
+        assertTrue(readyInstallation(root, listOf(asset), asset, "new", "parakeet", legacyMarkers = listOf("old")))
+        File(root, ".ready").writeText("other")
+        assertFalse(readyInstallation(root, listOf(asset), asset, "new", "parakeet", legacyMarkers = listOf("old")))
+    }
+
+    @Test fun catalogPinsAnImmutableRevisionAndKeepsTheV1Installations() {
+        assertTrue(ModelCatalog.PARAKEET_URL.startsWith("https://huggingface.co/"))
+        assertTrue(ModelCatalog.PARAKEET_URL.contains("/resolve/${ModelCatalog.PARAKEET_REVISION}/"))
+        assertTrue(Regex("[0-9a-f]{40}").matches(ModelCatalog.PARAKEET_REVISION))
+        assertTrue(ModelCatalog.marker.startsWith("verified-models-v2\n"))
+        // Exact text written by v0.3.8 and earlier: changing it would download 670 MB again on every phone.
+        assertEquals("verified-models-v1\n" +
+            "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2:487170055:5793d0fd397c5778d2cf2126994d58e9d56b1be7c04d13c7a15bb1b4eafb16bf\n" +
+            "silero_vad.onnx:643854:9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6\n" +
+            "encoder.int8.onnx:652184281:acfc2b4456377e15d04f0243af540b7fe7c992f8d898d751cf134c3a55fd2247\n" +
+            "decoder.int8.onnx:11845275:179e50c43d1a9de79c8a24149a2f9bac6eb5981823f2a2ed88d655b24248db4e\n" +
+            "joiner.int8.onnx:6355277:3164c13fc2821009440d20fcb5fdc78bff28b4db2f8d0f0b329101719c0948b3\n" +
+            "tokens.txt:93939:d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d",
+            ModelCatalog.legacyMarkers.single())
+    }
+
     @Test fun atomicDirectoryPublicationPreservesContents() {
         val root = directory()
         val staging = File(root, "staging").apply { mkdir() }

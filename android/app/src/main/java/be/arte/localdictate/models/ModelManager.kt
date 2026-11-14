@@ -23,8 +23,11 @@ class ModelManager(context: Context) {
         vadFile = File(installed, ModelCatalog.vad.name),
     )
 
+    /** Derived from the verified tokens.txt when the recognizer loads (hotword splitting); not a model file. */
+    val bpeVocab = File(root, "bpe.vocab")
+
     /** Fast startup: a versioned verification marker AND exact file sizes are required. */
-    fun isReady(): Boolean = readyInstallation(installed)
+    fun isReady(): Boolean = readyInstallation(installed, legacyMarkers = ModelCatalog.legacyMarkers)
 
     suspend fun prepare(onProgress: (PreparationProgress) -> Unit) = withContext(Dispatchers.IO) {
         preparationLock.withLock {
@@ -44,23 +47,28 @@ class ModelManager(context: Context) {
                 }
                 val downloads = File(root, "downloads")
                 val downloader = ResumableDownloader()
-                onProgress(PreparationProgress("Vérification / téléchargement de Parakeet"))
-                val archive = downloader.download(
-                    ModelCatalog.BASE_URL + ModelCatalog.archive.name, ModelCatalog.archive, downloads,
-                ) { onProgress(PreparationProgress("Téléchargement de Parakeet", it)) }
-                onProgress(PreparationProgress("Vérification / téléchargement de Silero VAD"))
-                val vad = downloader.download(
-                    ModelCatalog.BASE_URL + ModelCatalog.vad.name, ModelCatalog.vad, downloads,
-                ) { onProgress(PreparationProgress("Téléchargement de Silero VAD", it)) }
-                currentCoroutineContext().ensureActive()
-                check(staging.mkdirs()) { "Impossible de préparer le dossier temporaire" }
-                onProgress(PreparationProgress("Extraction et vérification de Parakeet"))
-                SafeModelExtractor().extract(archive, File(staging, ModelCatalog.PARAKEET)) {
-                    onProgress(PreparationProgress("Extraction et vérification de Parakeet", it))
+                // Leftovers of the former archive download (v0.3.8 and earlier) would only take space.
+                listOf("", ".part").forEach { deleteTree(File(downloads, "${ModelCatalog.PARAKEET}.tar.bz2$it")) }
+                // One file at a time (no archive to extract); each is checked by size and SHA-256 before use.
+                var done = 0L
+                suspend fun fetch(url: String, asset: ModelAsset, label: String): File {
+                    onProgress(PreparationProgress("Vérification / téléchargement : $label"))
+                    val file = downloader.download(url + asset.name, asset, downloads) { fraction ->
+                        val bytes = done + (fraction * asset.size).toLong()
+                        onProgress(PreparationProgress("Téléchargement : $label", bytes.toFloat() / ModelCatalog.downloadBytes))
+                    }
+                    done += asset.size
+                    return file
                 }
-                val stagedVad = File(staging, ModelCatalog.vad.name)
-                vad.copyTo(stagedVad)
-                if (!verified(stagedVad, ModelCatalog.vad)) throw IntegrityException("Silero VAD invalide après copie")
+                val parakeet = ModelCatalog.members.map { fetch(ModelCatalog.PARAKEET_URL, it, "Parakeet (${it.name})") to it }
+                val vad = fetch(ModelCatalog.VAD_URL, ModelCatalog.vad, "Silero VAD")
+                currentCoroutineContext().ensureActive()
+                onProgress(PreparationProgress("Installation des modèles vérifiés"))
+                val stagedParakeet = File(staging, ModelCatalog.PARAKEET)
+                check(stagedParakeet.mkdirs()) { "Impossible de préparer le dossier temporaire" }
+                // Same filesystem: verified files are moved, never copied or re-downloaded.
+                parakeet.forEach { (file, asset) -> atomicMove(file, File(stagedParakeet, asset.name)) }
+                atomicMove(vad, File(staging, ModelCatalog.vad.name))
                 currentCoroutineContext().ensureActive()
                 File(staging, ".ready").writeText(ModelCatalog.marker, Charsets.UTF_8)
                 if (!readyInstallation(staging)) throw IOException("Installation des modèles incomplète")

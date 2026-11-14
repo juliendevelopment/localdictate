@@ -41,13 +41,16 @@ internal fun readyInstallation(
     vad: ModelAsset = ModelCatalog.vad,
     markerText: String = ModelCatalog.marker,
     modelDirectory: String = ModelCatalog.PARAKEET,
+    legacyMarkers: List<String> = emptyList(),
 ): Boolean = try {
     val marker = File(installed, ".ready")
     val parakeet = File(installed, modelDirectory)
     Files.isDirectory(installed.toPath(), NOFOLLOW_LINKS) &&
         Files.isDirectory(parakeet.toPath(), NOFOLLOW_LINKS) &&
-        regularFileWithSize(marker, markerText.toByteArray(Charsets.UTF_8).size.toLong()) &&
-        marker.readText(Charsets.UTF_8) == markerText &&
+        (listOf(markerText) + legacyMarkers).any { expected ->
+            regularFileWithSize(marker, expected.toByteArray(Charsets.UTF_8).size.toLong()) &&
+                marker.readText(Charsets.UTF_8) == expected
+        } &&
         members.all { regularFileWithSize(File(parakeet, it.name), it.size) } &&
         regularFileWithSize(File(installed, vad.name), vad.size)
 } catch (_: IOException) {
