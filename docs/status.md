@@ -10,7 +10,7 @@ The **meeting** mode (sequential 2-hour recording, then local transcript to copy
 
 **v0.3.9** is released (14 November 2026, [release notes](releases/v0.3.9.md)): « Mes mots » (the user's hotwords and `entendu => voulu` replacements, maintainer request: the maintainer reports dictation works well apart from a few unknown words) and model preparation from the immutable Hugging Face revision (known issue 0). Host-tested only (JVM/Robolectric tests, lint, debug and release builds, plus the same sherpa-onnx configuration in Python on the FR/EN samples). Precise next action: steps 0 and 6 of the phone session.
 
-**v0.3.10** is prepared on `main` (16 November 2026, [release notes](releases/v0.3.10.md)): stop delay. Maintainer request: tapping ✓ right after the last word sometimes cut it. After ✓ the microphone now stays open 0.5 s by default, adjustable 0–2 s in « Réglages » (Dictée screen); ✕ and disarming still stop at once. Same setting on Linux (Réglages › Pendant la dictée). Host-tested only (JVM/Robolectric tests, lint, debug APK; Linux unit tests). Precise next action: tag `android-v0.3.10` once CI is green on that SHA, then step 7 of the phone session.
+**v0.3.10** is released (16 November 2026, [release notes](releases/v0.3.10.md)): stop delay. Maintainer request: tapping ✓ right after the last word sometimes cut it. After ✓ the microphone now stays open 0.5 s by default, adjustable 0–2 s in « Réglages » (Dictée screen); ✕ and disarming still stop at once. Same setting on Linux (Réglages › Pendant la dictée). Host-tested only (JVM/Robolectric tests, lint, debug APK; Linux unit tests). Precise next action: step 7 of the phone session.
 
 Verified on the phone:
 
@@ -95,7 +95,7 @@ Procedure: [ci.md](ci.md#releases). Never move a tag whose release exists. Versi
 | 0.3.7 | Dictation: automatic software gain so soft speech close to the microphone is picked up |
 | 0.3.8 | Dictation: microphone opened first on tap, 5 s audio queue, content-free diagnostic line. Meeting: cancellation cause recorded, French states, readable durations. Host-tested only |
 | 0.3.9 | « Mes mots »: user hotwords (beam search) and replacements, dictation and meeting; models downloaded per file from an immutable Hugging Face revision. Host-tested only |
-| 0.3.10 | Stop delay: microphone kept open 0.5 s after ✓ (0–2 s in « Réglages ») so the last words are not cut; same setting on Linux. Prepared, not released |
+| 0.3.10 | Stop delay: microphone kept open 0.5 s after ✓ (0–2 s in « Réglages ») so the last words are not cut; same setting on Linux. Host-tested only |
 
 ## Agreed scope
 
