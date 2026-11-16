@@ -24,6 +24,7 @@ Install a signed release APK. Record Android version, device, APK SHA, duration,
 - [ ] Weekly statistics: a dictation increments the current week; its duration matches « Durée capturée » (v0.2.3).
 - [ ] « Mes mots » (v0.3.9): dictate a sentence with a word it usually gets wrong, note the result; add the word on its own line, « Enregistrer les mots », dictate again. Then a `entendu => voulu` line for an error that comes back the same way. Note whether the diagnostic's decode time grew noticeably compared with v0.3.8, and any word that appears where it was not said.
 - [ ] « Préparer » on a phone or profile without the model (v0.3.9): about 670 MB in five files, ends « Modèles prêts »; after the update, a phone that already had the model shows « Modèles prêts » with no download.
+- [ ] Stop delay (v0.3.10): say a sentence and tap ✓ right after the last word, three times; the last word is in the text each time. « Réglages » shows 0,5 s by default; if words are still cut, try 1 s and note which value works.
 - [ ] New bubble (v0.2.0): drag onto ✕ hides it, waking/unlocking shows it again, « Afficher la bulle » from the notification; ✕ during dictation inserts nothing and keeps the text in history.
 
 ## Meeting ([meeting.md](meeting.md))

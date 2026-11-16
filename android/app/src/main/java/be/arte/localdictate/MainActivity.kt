@@ -73,6 +73,7 @@ class MainActivity : ComponentActivity() {
                     copyText = model.controller::copyText, clearHistory = model.controller::clearHistory,
                     clearStats = model.controller::clearStats,
                     saveVocabulary = model.controller::saveVocabulary,
+                    saveStopDelay = model.controller::saveStopDelay,
                     showBubble = { controller.service?.showBubble() },
                     startMeeting = ::startMeeting,
                     stopMeeting = ::stopMeeting,
@@ -147,7 +148,7 @@ private fun HomeScreen(
     microphone: () -> Unit, notifications: () -> Unit, overlay: () -> Unit, accessibility: () -> Unit,
     arm: () -> Unit, stop: () -> Unit, disarm: () -> Unit, copy: () -> Unit, clear: () -> Unit,
     copyText: (String) -> Unit, clearHistory: () -> Unit, clearStats: () -> Unit = {}, showBubble: () -> Unit = {},
-    saveVocabulary: (String) -> Unit = {},
+    saveVocabulary: (String) -> Unit = {}, saveStopDelay: (Long) -> Unit = {},
     startMeeting: () -> Unit, stopMeeting: () -> Unit,
     processMeeting: (String) -> Unit, selectMeeting: (String) -> Unit,
     unselectMeeting: () -> Unit, deleteMeeting: (String) -> Unit, copyMeeting: (String) -> Unit,
@@ -334,6 +335,8 @@ private fun HomeScreen(
             if (!meeting) {
                 HorizontalDivider()
                 VocabularySection(state.vocabulary, saveVocabulary)
+                HorizontalDivider()
+                StopDelaySection(state.stopDelayMs, saveStopDelay)
             }
             Text("Pas de cloud, pas d’analytics. Aucun enregistrement automatique. Le texte reconnu reste ici jusqu’à Effacer ; le son n’est pas sauvegardé.")
             TextButton(onClick = { licenses = true }, modifier = Modifier.testTag("licenses")) { Text("Modèles, licences et limites") }
@@ -392,6 +395,21 @@ private fun VocabularySection(saved: String, save: (String) -> Unit) {
     Button(onClick = { save(text) }, enabled = text != saved, modifier = Modifier.testTag("vocabulary-save")) {
         Text("Enregistrer les mots")
     }
+}
+
+/** Microphone kept open after ✓ so the last words are not cut (see StopDelay). */
+@Composable
+private fun StopDelaySection(saved: Long, save: (Long) -> Unit) {
+    var value by remember(saved) { mutableFloatStateOf(saved.toFloat()) }
+    Text("Réglages", style = MaterialTheme.typography.titleMedium)
+    Text("Délai avant l’arrêt du micro : ${StopDelay.label(StopDelay.clamp(value.toLong()))}",
+        modifier = Modifier.testTag("stop-delay-label"))
+    Slider(value = value, onValueChange = { value = it },
+        onValueChangeFinished = { save(StopDelay.clamp(value.toLong())) },
+        valueRange = 0f..StopDelay.MAX_MS.toFloat(),
+        steps = (StopDelay.MAX_MS / StopDelay.STEP_MS).toInt() - 1,
+        modifier = Modifier.fillMaxWidth().testTag("stop-delay"))
+    Text("Après ✓, le micro reste ouvert ce temps-là pour ne pas couper les derniers mots (0,5 s par défaut). ✕ arrête tout de suite.")
 }
 
 @Composable

@@ -37,6 +37,8 @@ class DictationService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     @Volatile private var bubble: FloatingControl? = null
     private var cancelRequested = false
+    /** Microphone still open after ✓ for the user's stop delay; cancelled by ✕, disarm or the end of the session. */
+    private var tailJob: Job? = null
     /** A bubble hidden by dragging it onto ✕ comes back when the phone is woken or unlocked. */
     private val wake = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) { bubble?.show() }
@@ -75,7 +77,8 @@ class DictationService : Service() {
                 bubble?.render(state)
                 val text = state.error ?: when (state.phase) {
                     Phase.RECORDING -> "Enregistrement local — touchez ✓ pour insérer"
-                    Phase.PROCESSING -> "Traitement local, microphone fermé"
+                    Phase.PROCESSING -> if (tailJob?.isActive == true) "Fin de la phrase, microphone encore ouvert"
+                        else "Traitement local, microphone fermé"
                     else -> "Bulle armée, microphone fermé"
                 }
                 // Only when the text changes: the duration ticks many times per second while dictating.
@@ -239,6 +242,8 @@ class DictationService : Service() {
             catch (_: OutOfMemoryError) { controller.update { it.copy(error = "Mémoire insuffisante, texte reconnu conservé.") } }
             catch (_: Throwable) { controller.update { it.copy(error = "Dictée interrompue : texte reconnu conservé, copie manuelle disponible.") } }
             finally {
+                // A pending stop delay must never close the microphone of a later dictation.
+                tailJob?.cancel(); tailJob = null
                 recorder.stop()
                 mediaPauser?.resume(); mediaPauser = null
                 wakeLock?.let { if (it.isHeld) it.release() }; wakeLock = null
@@ -258,16 +263,37 @@ class DictationService : Service() {
     fun showBubble() { bubble?.show() }
     /** ✕ on the bubble: stop listening and insert nothing; the text is still kept in the history. */
     fun cancelCapture() {
-        if (controller.state.value.phase != Phase.RECORDING) return
+        // During the stop delay ✕ still cancels: nothing was inserted yet.
+        if (controller.state.value.phase != Phase.RECORDING && tailJob?.isActive != true) return
         cancelRequested = true
         stopCapture()
     }
+    /**
+     * ✓ (or « Arrêter et traiter »): the microphone stays open for the user's stop delay so the last words spoken
+     * just before the tap are kept, then closes. ✕ and disarming close it at once, including during that delay.
+     */
     fun stopCapture() {
+        val immediate = cancelRequested || disarming
         if (controller.state.value.phase == Phase.RECORDING) {
-            microphone?.stop()
-            mediaPauser?.resume()
-            controller.update { it.copy(phase = Phase.PROCESSING, message = "Micro fermé. Traitement des derniers segments avant insertion…") }
-        }
+            val delayMs = if (immediate) 0L else controller.state.value.stopDelayMs
+            if (delayMs > 0) {
+                // Assigned before the state update so the notification already reads « encore ouvert ».
+                tailJob = scope.launch { delay(delayMs); closeMicrophone() }
+                controller.update { it.copy(phase = Phase.PROCESSING,
+                    message = "Fin de la phrase : micro encore ouvert ${StopDelay.label(delayMs)}, puis traitement avant insertion…") }
+                return
+            }
+            controller.update { it.copy(phase = Phase.PROCESSING, message = CLOSED) }
+        } else if (!immediate || tailJob?.isActive != true) return
+        tailJob?.cancel()
+        closeMicrophone()
+    }
+    private fun closeMicrophone() {
+        tailJob = null
+        microphone?.stop()
+        // Resumed only once the microphone is closed: music must not end up in the dictation.
+        mediaPauser?.resume()
+        controller.update { if (it.phase == Phase.PROCESSING && it.error == null) it.copy(message = CLOSED) else it }
     }
     fun disarm() {
         if (!attached) { stopSelf(); return }
@@ -315,5 +341,6 @@ class DictationService : Service() {
         const val DISARM = "be.arte.localdictate.DISARM"
         const val SHOW = "be.arte.localdictate.SHOW"
         internal const val CHANNEL = "dictation"
+        private const val CLOSED = "Micro fermé. Traitement des derniers segments avant insertion…"
     }
 }

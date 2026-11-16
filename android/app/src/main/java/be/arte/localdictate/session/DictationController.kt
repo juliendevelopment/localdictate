@@ -1,6 +1,7 @@
 package be.arte.localdictate.session
 
 import android.app.Application
+import android.content.Context
 import be.arte.localdictate.asr.Vocabulary
 import be.arte.localdictate.asr.VocabularyStore
 import be.arte.localdictate.insertion.PrivateClipboard
@@ -47,6 +48,8 @@ data class DictationState(
     val diagnostic: String? = null,
     /** The user's words, as typed (see [Vocabulary]). */
     val vocabulary: String = "",
+    /** Microphone kept open this long after ✓ (see [StopDelay]); ✕ and disarming close it at once. */
+    val stopDelayMs: Long = StopDelay.DEFAULT_MS,
 )
 
 class DictationController(private val app: Application) {
@@ -58,6 +61,7 @@ class DictationController(private val app: Application) {
     /** Parsed list read by the services at the start of a dictation or a transcription (memory, no I/O on the tap). */
     @Volatile var vocabulary: Vocabulary = Vocabulary.EMPTY
         private set
+    private val preferences = app.getSharedPreferences("settings", Context.MODE_PRIVATE)
     val gate = UseGate()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var preparationJob: Job? = null
@@ -71,6 +75,8 @@ class DictationController(private val app: Application) {
             vocabulary = Vocabulary.parse(text)
             update { it.copy(vocabulary = text) }
         }
+        runCatching { StopDelay.clamp(preferences.getLong(STOP_DELAY, StopDelay.DEFAULT_MS)) }
+            .onSuccess { delay -> update { it.copy(stopDelayMs = delay) } }
         runCatching { statsStore.read() }.onSuccess { weeks -> update { it.copy(stats = weeks) } }
         runCatching { journal.read() }.onSuccess { record ->
             update { it.copy(transcript = record.text, message = when {
@@ -148,6 +154,11 @@ class DictationController(private val app: Application) {
                     "Appliqués à la prochaine dictée et à la prochaine transcription de réunion.") }
         }.onFailure { update { state -> state.copy(error = "Impossible d’enregistrer la liste de mots.") } }
     }
+    fun saveStopDelay(ms: Long) {
+        val delay = StopDelay.clamp(ms)
+        preferences.edit().putLong(STOP_DELAY, delay).apply()
+        update { it.copy(stopDelayMs = delay) }
+    }
     fun clearHistory() {
         runCatching { historyStore.clear() }.onSuccess { update { it.copy(history = emptyList()) } }
     }
@@ -165,4 +176,5 @@ class DictationController(private val app: Application) {
                 it.message.substringAfter("Dernier résultat : ").takeUnless { m -> m.startsWith("Texte copié") }.orEmpty()) }
         }.onFailure { update { state -> state.copy(error = "Copie refusée par Android. Transcription conservée ici.") } }
     }
+    private companion object { const val STOP_DELAY = "stop_delay_ms" }
 }

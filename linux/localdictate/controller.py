@@ -224,11 +224,26 @@ class Controller:
             self._finish_capture(session)
 
     def stop(self, paste: bool = True) -> None:
+        """Stop press: the microphone stays open for the stop delay so the last words are kept, then closes.
+
+        Cancel, the length limit and a second press during the delay close it at once.
+        """
         session = self._session
         if session is None or session["stopping"]:
             return
         session["paste"] = paste
-        self._finish_capture(session)
+        delay = self.settings.stop_delay_ms / 1000 if paste and not session["limit"] else 0
+        if delay <= 0 or session.get("tail"):
+            self._finish_capture(session)
+            return
+        session["tail"] = True
+        self._publish(message=f"Fin de la phrase : micro encore ouvert {delay:.1f} s…".replace(".", ","))
+        self.timer(delay, lambda: self._end_tail(session))
+
+    def _end_tail(self, session: dict) -> bool:
+        if self._session is session and not session["stopping"]:
+            self._finish_capture(session)
+        return False
 
     def _finish_capture(self, session: dict) -> None:
         if session["stopping"]:

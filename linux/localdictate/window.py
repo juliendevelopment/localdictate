@@ -313,6 +313,15 @@ class MainWindow(Adw.ApplicationWindow):
         self.media_row.set_active(settings.pause_media)
         self.media_row.connect("notify::active", lambda row, _p: self.controller.update_settings(pause_media=row.get_active()))
         during.add(self.media_row)
+        self.stop_delay_row = Adw.SpinRow.new_with_range(0, 2, 0.1)
+        self.stop_delay_row.set_digits(1)
+        self.stop_delay_row.set_title("Délai avant l’arrêt du micro (s)")
+        self.stop_delay_row.set_subtitle("Après le raccourci d’arrêt, le micro reste ouvert ce temps-là pour ne pas "
+                                         "couper les derniers mots. Annuler arrête tout de suite.")
+        self.stop_delay_row.set_value(settings.stop_delay_ms / 1000)
+        self.stop_delay_row.connect("notify::value", lambda row, _p: self.controller.update_settings(
+            stop_delay_ms=round(row.get_value() * 1000)))
+        during.add(self.stop_delay_row)
         self.tray_row = Adw.SwitchRow(title="Icône de statut", subtitle="")
         self.tray_row.set_use_markup(False)
         self.tray_row.set_active(settings.show_tray)

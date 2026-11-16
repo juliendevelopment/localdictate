@@ -59,6 +59,24 @@ class MainActivityTest {
         compose.onNodeWithTag("vocabulary").assertDoesNotExist()
         compose.runOnIdle { controller.saveVocabulary("") }
     }
+    @Test fun stopDelayDefaultsToHalfASecondAndIsSavedPrivately() {
+        compose.runOnIdle {
+            compose.activity.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE).edit().clear().commit()
+            controller.saveStopDelay(be.arte.localdictate.session.StopDelay.DEFAULT_MS)
+        }
+        compose.onNodeWithTag("stop-delay-label").performScrollTo().assertTextEquals("Délai avant l’arrêt du micro : 0,5 s")
+        compose.onNodeWithTag("stop-delay").performScrollTo()
+            .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(1_200f) }
+        compose.onNodeWithTag("stop-delay-label").assertTextEquals("Délai avant l’arrêt du micro : 1,2 s")
+        compose.runOnIdle {
+            assertEquals(1_200L, controller.state.value.stopDelayMs)
+            assertEquals(1_200L, compose.activity.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
+                .getLong("stop_delay_ms", -1))
+        }
+        compose.onNodeWithTag("mode-meeting").performScrollTo().performClick()
+        compose.onNodeWithTag("stop-delay").assertDoesNotExist()
+        compose.runOnIdle { controller.saveStopDelay(be.arte.localdictate.session.StopDelay.DEFAULT_MS) }
+    }
     @Test fun dictationDiagnosticIsShownOnlyWhenPresent() {
         compose.onNodeWithTag("session-diagnostic").assertDoesNotExist()
         val line = "Diagnostic : micro 180 ms après le toucher • crête −31 dBFS • gain ×6,2 • 0 segment, 0,0 s"

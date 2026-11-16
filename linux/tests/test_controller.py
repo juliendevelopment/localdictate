@@ -47,7 +47,7 @@ class ControllerTest(unittest.TestCase):
     def controller(self, ready=True, engine=None, settings=None):
         engine = engine or CountingEngine()
         controller = Controller(
-            settings or Settings(), self.history, ReadyStore(ready),
+            settings or Settings(stop_delay_ms=0), self.history, ReadyStore(ready),
             capture_factory=lambda on_block, on_error: FakeCapture(on_block, on_error, **self.capture_options),
             engine_loader=lambda files: engine, paster=self.paster,
             notify=lambda title, body: self.notifications.append(title),
@@ -87,6 +87,40 @@ class ControllerTest(unittest.TestCase):
         controller.toggle()
         self.loop.pump(lambda: controller.snapshot.state == State.READY)
         self.assertEqual(self.media.calls, ["resume"])  # Never paused: the microphone did not open.
+
+    def test_stop_delay_keeps_microphone_open_then_pastes(self):
+        controller = self.controller(settings=Settings())
+        self.assertEqual(controller.settings.stop_delay_ms, 500)
+        self.loop.pump(lambda: controller.snapshot.state == State.READY)
+        controller.toggle()
+        session = controller._session
+        session["capture"].thread.join(5)
+        controller.toggle()
+        # Still recording during the delay: microphone open, media still paused, nothing pasted.
+        self.assertEqual(controller.snapshot.state, State.RECORDING)
+        self.assertFalse(session["capture"].stopped.is_set())
+        self.assertEqual(self.media.calls, ["pause"])
+        self.assertIn("Fin de la phrase", controller.snapshot.message)
+        self.assertFalse(self.loop.timers[-1]())
+        self.assertTrue(session["capture"].stopped.is_set())
+        self.assertTrue(self.loop.pump(lambda: controller.snapshot.state == State.READY))
+        self.assertEqual(len(self.paster.calls), 1)
+        self.assertEqual(self.media.calls, ["pause", "resume"])
+
+    def test_cancel_or_second_press_during_stop_delay_stops_at_once(self):
+        for second in ("cancel", "toggle"):
+            self.paster.calls.clear()
+            controller = self.controller(settings=Settings(stop_delay_ms=2000))
+            self.loop.pump(lambda: controller.snapshot.state == State.READY)
+            controller.toggle()
+            session = controller._session
+            session["capture"].thread.join(5)
+            controller.toggle()
+            self.assertFalse(session["capture"].stopped.is_set())
+            getattr(controller, second)()
+            self.assertTrue(session["capture"].stopped.is_set())
+            self.assertTrue(self.loop.pump(lambda: controller.snapshot.state == State.READY))
+            self.assertEqual(len(self.paster.calls), 1 if second == "toggle" else 0)
 
     def test_cancel_keeps_text_without_pasting(self):
         controller = self.controller()
@@ -163,7 +197,7 @@ class ControllerTest(unittest.TestCase):
         self.assertEqual(self.history.get(entry.id).text(), "mot11 mot12 mot13 mot14 mot15 mot16 mot17 mot18 mot19 mot20")
 
     def test_history_is_pruned(self):
-        controller = self.controller(settings=Settings(history_limit=2))
+        controller = self.controller(settings=Settings(history_limit=2, stop_delay_ms=0))
         self.loop.pump(lambda: controller.snapshot.state == State.READY)
         for _ in range(3):
             controller.toggle()

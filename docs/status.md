@@ -10,6 +10,8 @@ The **meeting** mode (sequential 2-hour recording, then local transcript to copy
 
 **v0.3.9** is released (14 November 2026, [release notes](releases/v0.3.9.md)): « Mes mots » (the user's hotwords and `entendu => voulu` replacements, maintainer request: the maintainer reports dictation works well apart from a few unknown words) and model preparation from the immutable Hugging Face revision (known issue 0). Host-tested only (JVM/Robolectric tests, lint, debug and release builds, plus the same sherpa-onnx configuration in Python on the FR/EN samples). Precise next action: steps 0 and 6 of the phone session.
 
+**v0.3.10** is prepared on `main` (16 November 2026, [release notes](releases/v0.3.10.md)): stop delay. Maintainer request: tapping ✓ right after the last word sometimes cut it. After ✓ the microphone now stays open 0.5 s by default, adjustable 0–2 s in « Réglages » (Dictée screen); ✕ and disarming still stop at once. Same setting on Linux (Réglages › Pendant la dictée). Host-tested only (JVM/Robolectric tests, lint, debug APK; Linux unit tests). Precise next action: tag `android-v0.3.10` once CI is green on that SHA, then step 7 of the phone session.
+
 Verified on the phone:
 
 - installation (after pausing Play Protect scanning) and in-place updates with the same key;
@@ -30,7 +32,7 @@ A Linux desktop port of the dictation lives in `linux/` (Python, GTK 4/libadwait
 
 ## Next phone session
 
-**Precise next action.** One sitting of about 30 minutes on the Pixel, with the v0.3.9 APK from the GitHub release. Steps and boxes: [acceptation-pixel.md](acceptation-pixel.md). For each step, if something fails, report the « Diagnostic : … » line and the message under « Durée capturée » (dictation), or the state and message in the « Réunion » tab (meeting).
+**Precise next action.** One sitting of about 30 minutes on the Pixel, with the v0.3.10 APK from the GitHub release. Steps and boxes: [acceptation-pixel.md](acceptation-pixel.md). For each step, if something fails, report the « Diagnostic : … » line and the message under « Durée capturée » (dictation), or the state and message in the « Réunion » tab (meeting).
 
 0. **Model preparation** (v0.3.9): on the updated Pixel, « Modèles prêts » with no download. If a phone or work profile without the model is available, « Préparer » downloads about 670 MB and ends « Modèles prêts ».
 1. **Start of speech and soft speech** (v0.3.7, v0.3.8; items 1 and 2): a short phrase spoken right after the tap, three times; then soft, normal and loud voice in one dictation. Note the diagnostic line each time.
@@ -39,6 +41,8 @@ A Linux desktop port of the dictation lives in `linux/` (Python, GTK 4/libadwait
 4. **Weekly statistics** (v0.2.3; item 7): one dictation increments the current week; the duration matches « Durée capturée ».
 5. **Meeting** (v0.3.3, v0.3.4, v0.3.8; item 5): « Retranscrire » on the 3784 s recording and read the final state and cause; then one recording of 1 h 30 to 2 h with the screen off, then « Retranscrire » on it; it must end « terminé ».
 6. **Mes mots** (v0.3.9; item 9): dictate a sentence with a usually missed word, add it in « Mes mots », dictate again; then an `entendu => voulu` line. Report the decode time of the diagnostic line compared with before, and any listed word that appears where it was not said (if so, the score 1.5 is too strong for this list).
+
+7. **Stop delay** (v0.3.10): say a sentence and tap ✓ immediately after the last word, three times; the last word must be in the text. If words are still cut at 0.5 s, try 1 s in « Réglages » and report which value works.
 
 ## Known issues
 
@@ -91,6 +95,7 @@ Procedure: [ci.md](ci.md#releases). Never move a tag whose release exists. Versi
 | 0.3.7 | Dictation: automatic software gain so soft speech close to the microphone is picked up |
 | 0.3.8 | Dictation: microphone opened first on tap, 5 s audio queue, content-free diagnostic line. Meeting: cancellation cause recorded, French states, readable durations. Host-tested only |
 | 0.3.9 | « Mes mots »: user hotwords (beam search) and replacements, dictation and meeting; models downloaded per file from an immutable Hugging Face revision. Host-tested only |
+| 0.3.10 | Stop delay: microphone kept open 0.5 s after ✓ (0–2 s in « Réglages ») so the last words are not cut; same setting on Linux. Prepared, not released |
 
 ## Agreed scope
 

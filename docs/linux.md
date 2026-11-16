@@ -103,6 +103,13 @@ only those players are sent `Play`, and only if they are still `Paused`: a playe
 restarted meanwhile is left alone. If the dictation ends before a pause completes, the player is resumed at
 once. Players without MPRIS keep playing. Switch: Réglages › Pendant la dictée.
 
+### Stop delay
+
+After the stop press the microphone stays open for `stop_delay_ms` (default 500, 0–2000; Réglages › Pendant
+la dictée, in seconds) so the last words spoken just before the press are kept; the state stays « recording »
+with the message « Fin de la phrase… ». Cancel, the length limit and a second press during the delay stop at
+once. Media resumes only when the microphone closes. Host-tested only.
+
 ### Status icon
 
 `tray.py` exports `org.kde.StatusNotifierItem` at `/StatusNotifierItem` and `com.canonical.dbusmenu` at

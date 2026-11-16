@@ -33,6 +33,8 @@ class Settings:
     history_limit: int = 50
     # Pause MPRIS media players (music, podcasts, videos in browsers) while the microphone is open.
     pause_media: bool = True
+    # Microphone kept open this long after the stop press so the last words are not cut (cancel stops at once).
+    stop_delay_ms: int = 500
     show_tray: bool = True
     start_in_background: bool = False
 
@@ -43,6 +45,7 @@ class Settings:
         clean.max_auto_gain_db = min(30.0, max(0.0, float(clean.max_auto_gain_db)))
         clean.vad_threshold = min(0.9, max(0.1, float(clean.vad_threshold)))
         clean.history_limit = min(1000, max(1, int(clean.history_limit)))
+        clean.stop_delay_ms = min(2000, max(0, int(clean.stop_delay_ms)))
         if clean.paste_keys not in PASTE_KEYS:
             clean.paste_keys = default.paste_keys
         if not isinstance(clean.preferred_trigger, str) or not clean.preferred_trigger.strip():
