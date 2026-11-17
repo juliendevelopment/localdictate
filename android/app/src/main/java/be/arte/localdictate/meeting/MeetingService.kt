@@ -16,6 +16,7 @@ import be.arte.localdictate.formatDuration
 import be.arte.localdictate.asr.LocalRecognizer
 import be.arte.localdictate.asr.SileroSegmenter
 import be.arte.localdictate.audio.MicrophoneCapture
+import be.arte.localdictate.audio.Pcm16
 import kotlinx.coroutines.*
 
 /** No boot receiver, no sticky restart, no capture in onCreate. One explicit launch token, one job. */
@@ -27,7 +28,6 @@ class MeetingService : Service() {
     @Volatile private var microphone: MicrophoneCapture? = null
     @Volatile private var captureStage = false
     @Volatile private var stopRequested = false
-    @Volatile private var processAfterStop = false
     @Volatile private var cancelled = false
     @Volatile private var destroyed = false
     @Volatile private var interruption = ""
@@ -62,10 +62,11 @@ class MeetingService : Service() {
     }
     fun stopOrCancel(fromNotification: Boolean = false) {
         if (captureStage) {
+            // v0.3.11: stopping only ends the recording; the user starts « Transcrire » when they choose (for
+            // example after a second recording, or at home with the phone charging).
             stopRequested = true
-            processAfterStop = true
             microphone?.stop()
-            controller.update { it.copy(message = "Micro fermé ; vidage du son accepté avant transcription.") }
+            controller.update { it.copy(message = "Micro fermé ; sauvegarde du son déjà capté.") }
         } else {
             stopCause.record(if (fromNotification) MeetingStopCause.USER_NOTIFICATION else MeetingStopCause.USER_APP)
             cancelled = true
@@ -85,6 +86,7 @@ class MeetingService : Service() {
         var engine: LocalRecognizer? = null
         var vad: SileroSegmenter? = null
         var timer: Job? = null
+        val gainDb = controller.state.value.gainDb // Fixed for the whole run, even if the setting changes meanwhile.
         fun persist(next: MeetingSession) {
             repository.save(next); session = next
             controller.update { it.copy(selected = next, phase = next.phase, durationMs = next.durationMs,
@@ -105,11 +107,22 @@ class MeetingService : Service() {
                     recorder.stop()
                 }
                 var lastSaved = 0L
+                var levelAt = 0L
+                var levelPeak = 0f
+                controller.resetLevels()
                 val result = PcmRecording.create(repository.audio(checkNotNull(session).id), repository.guard).use { recording ->
                     MeetingCapturePipeline(object : MeetingRecorder {
                         override suspend fun read(emit: (ByteArray) -> Unit) = recorder.read(onSilenced = { silenced ->
                             if (silenced) { interruption = "Microphone rendu muet par Android ; capture partielle à vérifier."; recorder.stop() }
-                        }, emit = { emit(it.pcm16) })
+                        }, emit = { block ->
+                            // Live bars only: about 12 values per second, the loudest block of each window.
+                            levelPeak = maxOf(levelPeak, Pcm16.level(block.samples))
+                            val now = android.os.SystemClock.elapsedRealtime()
+                            if (now - levelAt >= LEVEL_INTERVAL_MS) {
+                                controller.pushLevel(levelPeak); levelPeak = 0f; levelAt = now
+                            }
+                            emit(block.pcm16)
+                        })
                         override fun stop() = recorder.stop()
                     }, append = { recording.append(it) }, duration = { ms ->
                         controller.update { it.copy(durationMs = ms) }
@@ -122,20 +135,20 @@ class MeetingService : Service() {
                 microphone = null
                 captureStage = false
                 timer.cancel(); timer = null
+                controller.resetLevels()
                 persist(checkNotNull(session).copy(phase = MeetingPhase.RECORDED, durationMs = result.samples * 1000 / 16_000,
-                    diagnostic = listOf(result.diagnostic, interruption).filter { it.isNotBlank() }.joinToString(" ").ifBlank { "Audio privé sauvegardé." }))
+                    diagnostic = listOf(result.diagnostic, interruption).filter { it.isNotBlank() }.joinToString(" ")
+                        .ifBlank { "Audio privé sauvegardé. Touchez « Transcrire » quand vous voulez." }))
                 if (!stopRequested && !destroyed) alertStopped(listOf(result.diagnostic, interruption).filter { it.isNotBlank() }
                     .joinToString(" ").ifBlank { "Enregistrement arrêté." })
-                if (!processAfterStop || destroyed || result.diagnostic.isNotBlank() || interruption.isNotBlank()) return
-                // Capture has fully drained and closed before the microphone FGS type is removed.
-                withContext(Dispatchers.Main) { promote(recording = false) }
+                return // Transcription is always an explicit, separate action.
             } else {
                 persist(repository.read(request.id))
                 val diagnostic = repository.recoverAudio(request.id) // Explicit UI action, original preserved before repair.
                 val actualMs = SavedPcm(repository.audio(request.id)).use { it.samples * 1000 / 16_000 }
                 // Each explicit run reports only its own outcome; earlier runs' messages are not repeated.
                 persist(checkNotNull(session).copy(phase = MeetingPhase.RECORDED, durationMs = actualMs,
-                    diagnostic = "Nouvelle transcription. $diagnostic"))
+                    diagnostic = "Nouvelle transcription (gain : ${MeetingGain.label(gainDb)}). $diagnostic"))
             }
             if (cancelled || destroyed) throw CancellationException()
             wake(PROCESS_TIMEOUT_MS)
@@ -155,11 +168,12 @@ class MeetingService : Service() {
             val decoder = engine
             val vocabulary = dictation.vocabulary
             val detector = vad
+            val gain = MeetingGain.create(gainDb) // Applied before Silero, so Parakeet gets the same raised segments.
             persist(repository.newJournal(checkNotNull(session)).copy(phase = MeetingPhase.TRANSCRIBING))
             var lastSaved = 0L
             TranscriptJournal.create(repository.journal(checkNotNull(session)), repository.guard).use { journal ->
                 MeetingTranscriber().transcribe(repository.audio(checkNotNull(session).id), journal, object : MeetingDecoder {
-                    override fun accept(samples: FloatArray) = detector.acceptTimed(samples).map { MeetingSpeech(it.startSample, it.samples) }
+                    override fun accept(samples: FloatArray) = detector.acceptTimed(gain?.apply(samples) ?: samples).map { MeetingSpeech(it.startSample, it.samples) }
                     override fun finish() = detector.finishTimed().map { MeetingSpeech(it.startSample, it.samples) }
                     override fun recognize(samples: FloatArray) = decoder.recognize(samples, vocabulary)
                     override fun close() = Unit // Service owns both native handles through the finally below.
@@ -256,5 +270,6 @@ class MeetingService : Service() {
         const val ALERT_CHANNEL = "meeting-alerts"
         const val ALERT_NOTIFICATION = 23
         const val PROCESS_TIMEOUT_MS = 6L * 60 * 60 * 1000
+        private const val LEVEL_INTERVAL_MS = 80L
     }
 }

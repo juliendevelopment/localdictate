@@ -104,6 +104,39 @@ class MainActivityTest {
         compose.onNodeWithTag("arm").assertDoesNotExist()
         compose.runOnIdle { assertNull(shadowOf(compose.activity).nextStartedService) }
     }
+    @Test fun meetingGainIsSavedPrivatelyAndShownOnlyInMeetingMode() {
+        val meetings = (compose.activity.application as DictateApplication).meetings
+        compose.runOnIdle { meetings.saveGain(0) }
+        compose.onNodeWithTag("meeting-gain-12").assertDoesNotExist()
+        compose.onNodeWithTag("mode-meeting").performClick()
+        compose.onNodeWithTag("meeting-gain-label").performScrollTo().assertTextEquals("Gain automatique à la transcription : aucun")
+        compose.onNodeWithTag("meeting-gain-0").assertIsSelected()
+        compose.onNodeWithTag("meeting-gain-12").performScrollTo().performClick()
+        compose.onNodeWithTag("meeting-gain-label").assertTextEquals("Gain automatique à la transcription : +12 dB")
+        compose.onNodeWithTag("meeting-gain-12").assertIsSelected()
+        compose.runOnIdle {
+            assertEquals(12, meetings.state.value.gainDb)
+            assertEquals(12, compose.activity.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
+                .getInt("meeting_gain_db", -1))
+            assertNull(shadowOf(compose.activity).nextStartedService)
+            meetings.saveGain(0)
+        }
+    }
+    @Test fun recordingMeetingShowsLiveLevelAndStopsWithoutTranscribing() {
+        val meetings = (compose.activity.application as DictateApplication).meetings
+        compose.runOnIdle {
+            meetings.update { it.copy(busy = true, phase = be.arte.localdictate.meeting.MeetingPhase.RECORDING, durationMs = 5_000) }
+            meetings.pushLevel(0.1f)
+        }
+        compose.onNodeWithTag("mode-meeting").performClick()
+        compose.onNodeWithTag("meeting-level").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("meeting-stop").assertTextEquals("Arrêter l’enregistrement")
+        compose.onNodeWithTag("meeting-gain-label").assertDoesNotExist()
+        compose.runOnIdle {
+            meetings.update { it.copy(busy = false, phase = null, durationMs = 0) }
+            meetings.resetLevels()
+        }
+    }
     @Test fun selectedModeIsHighlighted() {
         compose.onNodeWithTag("mode-dictation").assertIsSelected()
         compose.onNodeWithTag("mode-meeting").assertIsNotSelected()

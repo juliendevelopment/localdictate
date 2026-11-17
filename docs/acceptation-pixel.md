@@ -30,8 +30,9 @@ Install a signed release APK. Record Android version, device, APK SHA, duration,
 ## Meeting ([meeting.md](meeting.md))
 
 - [ ] A run cancelled from the app, then one cancelled from the notification: each ends `CANCELLED` (shown « annulé ») with its own cause in the message (v0.3.8). « Retranscrire » on the 3784 s recording: read the final phase and cause.
-- [ ] Short meeting (2–5 min, French): « Démarrer un enregistrement », notification shown, duration counting; stop from the app, then from the notification. Phases go `RECORDING` → `TRANSCRIBING` → `COMPLETE`; the transcript matches what was said, no invented text; « Copier la transcription » and the Markdown export give the same plain text.
+- [ ] Short meeting (2–5 min, French): « Démarrer un enregistrement », notification shown, duration counting; stop from the app, then from the notification. Level bars move with the voice while recording; stop leaves the meeting « audio sauvegardé » without transcribing (v0.3.11), then « Transcrire » goes `TRANSCRIBING` → `COMPLETE`; the transcript matches what was said, no invented text; « Copier la transcription » and the Markdown export give the same plain text.
 - [ ] While a meeting records or processes, dictation cannot be armed, and the reverse.
+- [ ] Two recordings in a row (v0.3.11): stop the first, start the second at once, then transcribe both. « Retranscrire » the same meeting with gain « Aucun » and « +12 »: report which reads better for a distant speaker, and any passage present in one and missing in the other.
 - [ ] Screen off and locked during recording, then during processing: no gap in the audio (compare the WAV export), processing goes on.
 - [ ] Interruptions: phone call, another app taking the microphone, revoke microphone, kill the app: session left `RECORDED`/`CANCELLED`/`ERROR` with a message, audio kept, « Transcrire » / « Retranscrire (nouveau journal) » resumes explicitly.
 - [ ] 30–60 min, then 2 h: stop exactly at 7200 s, transcription time, peak RAM, heat, battery, free space before/after.

@@ -12,6 +12,7 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -20,6 +21,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -58,6 +63,7 @@ class MainActivity : ComponentActivity() {
             val model: DictationViewModel = viewModel(factory = DictationViewModel.Factory(application))
             val state by model.controller.state.collectAsState()
             val meetingState by model.meetings.state.collectAsState()
+            val meetingLevels by model.meetings.levels.collectAsState()
             MaterialTheme {
                 HomeScreen(state, meetingState, readiness,
                     prepare = model.controller::prepare, cancel = model.controller::cancelPreparation,
@@ -82,7 +88,8 @@ class MainActivity : ComponentActivity() {
                     unselectMeeting = { model.meetings.update { it.copy(selected = null, page = null) } },
                     deleteMeeting = model.meetings::delete,
                     copyMeeting = model.meetings::copyTranscript,
-                    exportMeeting = { id, wav -> model.meetings.export(id, wav) { startActivity(it) } })
+                    exportMeeting = { id, wav -> model.meetings.export(id, wav) { startActivity(it) } },
+                    meetingLevels = meetingLevels, saveMeetingGain = model.meetings::saveGain)
             }
         }
     }
@@ -153,14 +160,18 @@ private fun HomeScreen(
     processMeeting: (String) -> Unit, selectMeeting: (String) -> Unit,
     unselectMeeting: () -> Unit, deleteMeeting: (String) -> Unit, copyMeeting: (String) -> Unit,
     exportMeeting: (String, Boolean) -> Unit,
+    meetingLevels: List<Float> = emptyList(), saveMeetingGain: (Int) -> Unit = {},
 ) {
     var meeting by rememberSaveable { mutableStateOf(false) }
     var disclosure by rememberSaveable { mutableStateOf(false) }
     var deleting by rememberSaveable { mutableStateOf<String?>(null) }
     var licenses by rememberSaveable { mutableStateOf(false) }
     var notices by rememberSaveable { mutableStateOf(false) }
+    val scroll = rememberScrollState()
+    // Each mode opens at its top, where its main button is (the other mode's scroll position means nothing here).
+    LaunchedEffect(meeting) { scroll.scrollTo(0) }
     Surface(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
+        Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("LocalDictate", style = MaterialTheme.typography.headlineLarge)
             Text("Dictée locale • français et anglais", style = MaterialTheme.typography.titleMedium)
@@ -170,7 +181,7 @@ private fun HomeScreen(
             }
             if (meeting) {
                 Text("Jusqu’à 2 heures", style = MaterialTheme.typography.titleLarge)
-                Text("Enregistrement direct sur disque jusqu’à 2 heures, puis transcription locale après arrêt, à copier ou exporter en Markdown pour la donner à l’outil de votre choix (un LLM pour le résumé, par exemple). Langue détectée automatiquement (français, anglais, néerlandais…). Les pauses courtes sont regroupées pour garder le contexte des phrases. Aucun collage automatique dans une autre application. Accord des participants à votre charge.")
+                Text("Enregistrement direct sur disque jusqu’à 2 heures, puis transcription locale quand vous touchez « Transcrire », à copier ou exporter en Markdown pour la donner à l’outil de votre choix (un LLM pour le résumé, par exemple). Langue détectée automatiquement (français, anglais, néerlandais…). Les pauses courtes sont regroupées pour garder le contexte des phrases. Aucun collage automatique dans une autre application. Accord des participants à votre charge.")
                 if (meetingState.busy || meetingState.phase != null) {
                     Text("État : " + when (val phase = meetingState.phase) {
                         null -> "occupé"
@@ -180,8 +191,9 @@ private fun HomeScreen(
                     if (meetingState.durationMs > 0) Text("Durée : ${formatDuration(meetingState.durationMs)} / 2 h")
                     Text(meetingState.message, modifier = Modifier.testTag("meeting-message"))
                     if (meetingState.phase == MeetingPhase.RECORDING) {
+                        MeetingLevelBars(meetingLevels)
                         Button(onClick = stopMeeting, modifier = Modifier.fillMaxWidth().testTag("meeting-stop")) {
-                            Text("Arrêter et transcrire")
+                            Text("Arrêter l’enregistrement")
                         }
                     } else if (meetingState.phase == MeetingPhase.TRANSCRIBING) {
                         OutlinedButton(onClick = stopMeeting, modifier = Modifier.fillMaxWidth().testTag("meeting-cancel")) {
@@ -332,6 +344,10 @@ private fun HomeScreen(
                 Text("Comptées sur ce téléphone uniquement, sans garder les textes.")
                 TextButton(onClick = clearStats, modifier = Modifier.testTag("stats-clear")) { Text("Effacer les statistiques") }
             }
+            if (meeting && !meetingState.busy) {
+                HorizontalDivider()
+                MeetingGainSection(meetingState.gainDb, saveMeetingGain)
+            }
             if (!meeting) {
                 HorizontalDivider()
                 VocabularySection(state.vocabulary, saveVocabulary)
@@ -397,6 +413,44 @@ private fun VocabularySection(saved: String, save: (String) -> Unit) {
     }
 }
 
+/** Live microphone level while a meeting records, drawn like the bubble's bars (newest on the right). */
+@Composable
+private fun MeetingLevelBars(levels: List<Float>) {
+    val background = Color(0xFF6E4BA8)
+    val ink = Color.White
+    Canvas(Modifier.fillMaxWidth().height(64.dp).testTag("meeting-level")) {
+        drawRoundRect(background, cornerRadius = CornerRadius(size.height / 2f))
+        if (levels.isEmpty()) return@Canvas
+        val barWidth = 3.dp.toPx()
+        val gap = 4.dp.toPx()
+        val fits = ((size.width - 32.dp.toPx() + gap) / (barWidth + gap)).toInt().coerceAtLeast(1)
+        val shown = levels.takeLast(fits)
+        var x = (size.width - (shown.size * barWidth + (shown.size - 1) * gap)) / 2f
+        val middle = size.height / 2f
+        val maxHalf = size.height * 0.36f
+        shown.forEach { level ->
+            // Same scale as the bubble: speech RMS is small, a square root spreads soft and loud voices.
+            val half = maxOf(barWidth / 2f, kotlin.math.sqrt((level * 6f).coerceIn(0f, 1f)) * maxHalf)
+            drawRoundRect(ink, topLeft = Offset(x, middle - half), size = Size(barWidth, half * 2f),
+                cornerRadius = CornerRadius(barWidth / 2f))
+            x += barWidth + gap
+        }
+    }
+}
+
+/** Ceiling of the automatic gain used when a meeting is transcribed (see MeetingGain). */
+@Composable
+private fun MeetingGainSection(saved: Int, save: (Int) -> Unit) {
+    Text("Réglages réunion", style = MaterialTheme.typography.titleMedium)
+    Text("Gain automatique à la transcription : ${MeetingGain.label(saved)}", modifier = Modifier.testTag("meeting-gain-label"))
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        MeetingGain.CHOICES_DB.forEach { db ->
+            ModeButton(if (db == 0) "Aucun" else "+$db", selected = db == saved, tag = "meeting-gain-$db") { save(db) }
+        }
+    }
+    Text("Monte les voix lointaines ou faibles (un professeur au fond de la salle) sans jamais saturer. Le son enregistré n’est pas modifié : vous pouvez retranscrire la même réunion avec un autre réglage.")
+}
+
 /** Microphone kept open after ✓ so the last words are not cut (see StopDelay). */
 @Composable
 private fun StopDelaySection(saved: Long, save: (Long) -> Unit) {
@@ -423,6 +477,9 @@ private fun SetupRow(label: String, granted: Boolean, action: () -> Unit, tag: S
 @Composable
 private fun ModeButton(label: String, selected: Boolean, tag: String, onClick: () -> Unit) {
     val modifier = Modifier.testTag(tag).semantics { this.selected = selected }
-    if (selected) Button(onClick = onClick, modifier = modifier) { Text(label) }
-    else OutlinedButton(onClick = onClick, modifier = modifier) { Text(label) }
+    // One composable for both looks: swapping Button/OutlinedButton dropped the focused node on click, and focus
+    // jumped to another button lower on the screen, scrolling the page away from its top.
+    OutlinedButton(onClick = onClick, modifier = modifier,
+        colors = if (selected) ButtonDefaults.buttonColors() else ButtonDefaults.outlinedButtonColors(),
+        border = if (selected) null else ButtonDefaults.outlinedButtonBorder()) { Text(label) }
 }

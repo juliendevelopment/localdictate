@@ -19,6 +19,8 @@ data class MeetingState(
     val sessions: List<MeetingSession> = emptyList(), val selected: MeetingSession? = null,
     val page: TranscriptPage? = null, val journals: List<String> = emptyList(), val durationMs: Long = 0,
     val processedMs: Long = 0, val message: String = "Aucun enregistrement automatique.", val error: String? = null,
+    /** Ceiling of the automatic gain used by the next transcription (see [MeetingGain]). */
+    val gainDb: Int = MeetingGain.DEFAULT_DB,
 )
 data class MeetingLaunch(val token: String, val id: String?)
 
@@ -31,7 +33,22 @@ class MeetingController(private val app: Application, private val dictation: Dic
     private var pending: MeetingLaunch? = null
     var service: MeetingService? = null
         internal set
-    init { scope.launch { refresh() } }
+    private val preferences = app.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
+    /** Latest microphone levels (RMS) while recording, oldest first, for the live bars; never stored. */
+    private val levelHistory = MutableStateFlow(List(LEVEL_BARS) { 0f })
+    val levels = levelHistory.asStateFlow()
+    init {
+        runCatching { MeetingGain.clamp(preferences.getInt(GAIN_DB, MeetingGain.DEFAULT_DB)) }
+            .onSuccess { db -> mutable.update { it.copy(gainDb = db) } }
+        scope.launch { refresh() }
+    }
+    fun saveGain(db: Int) {
+        val gain = MeetingGain.clamp(db)
+        preferences.edit().putInt(GAIN_DB, gain).apply()
+        update { it.copy(gainDb = gain) }
+    }
+    internal fun pushLevel(level: Float) = levelHistory.update { it.drop(1) + level }
+    internal fun resetLevels() { levelHistory.value = List(LEVEL_BARS) { 0f } }
     fun update(change: (MeetingState) -> MeetingState) = mutable.update(change)
     private fun acquire(): Boolean {
         if (!dictation.gate.acquire(Use.MEETING)) return false
@@ -115,5 +132,9 @@ class MeetingController(private val app: Application, private val dictation: Dic
             catch (_: Exception) { update { it.copy(error = "Opération impossible : vérifiez espace et intégrité. Les fichiers privés sont conservés.") } }
             finally { release() }
         }
+    }
+    private companion object {
+        const val GAIN_DB = "meeting_gain_db"
+        const val LEVEL_BARS = 32
     }
 }

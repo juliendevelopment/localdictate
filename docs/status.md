@@ -1,6 +1,6 @@
 # LocalDictate status
 
-## Situation on 14 November 2026
+## Situation on 18 November 2026
 
 **Dictation** ships as signed APKs on GitHub releases. Versions 0.1.0 to 0.2.0 were published while the repository was private (kept in a private archive with the original history); the public repository starts with **v0.2.1**, same app as 0.2.0 plus the Apache 2.0 license and English documentation. The app is installed and tested by the maintainer on a Pixel with Google Keep, a messaging app and Gboard.
 
@@ -11,6 +11,8 @@ The **meeting** mode (sequential 2-hour recording, then local transcript to copy
 **v0.3.9** is released (14 November 2026, [release notes](releases/v0.3.9.md)): « Mes mots » (the user's hotwords and `entendu => voulu` replacements, maintainer request: the maintainer reports dictation works well apart from a few unknown words) and model preparation from the immutable Hugging Face revision (known issue 0). Host-tested only (JVM/Robolectric tests, lint, debug and release builds, plus the same sherpa-onnx configuration in Python on the FR/EN samples). Precise next action: steps 0 and 6 of the phone session.
 
 **v0.3.10** is released (16 November 2026, [release notes](releases/v0.3.10.md)): stop delay. Maintainer request: tapping ✓ right after the last word sometimes cut it. After ✓ the microphone now stays open 0.5 s by default, adjustable 0–2 s in « Réglages » (Dictée screen); ✕ and disarming still stop at once. Same setting on Linux (Réglages › Pendant la dictée). Host-tested only (JVM/Robolectric tests, lint, debug APK; Linux unit tests). Precise next action: step 7 of the phone session.
+
+**v0.3.11** is prepared (18 November 2026, [release notes](releases/v0.3.11.md)), maintainer request before a 3-hour Dutch class recorded in two parts: in meeting mode, stop no longer chains into the transcription (« Transcrire » is a separate tap, so a second recording can start at once), an automatic gain applied at transcription only (« Aucun » by default, +6/+12/+18 dB, the recording stays raw so « Retranscrire » can compare), and live level bars while recording. Host-tested only (JVM/Robolectric tests, lint, debug APK). Precise next action: report from the class the duration, final state and message of each recording, the transcription time, and which gain reads better on the Dutch transcript (step 5 of the phone session).
 
 Verified on the phone:
 
@@ -96,6 +98,7 @@ Procedure: [ci.md](ci.md#releases). Never move a tag whose release exists. Versi
 | 0.3.8 | Dictation: microphone opened first on tap, 5 s audio queue, content-free diagnostic line. Meeting: cancellation cause recorded, French states, readable durations. Host-tested only |
 | 0.3.9 | « Mes mots »: user hotwords (beam search) and replacements, dictation and meeting; models downloaded per file from an immutable Hugging Face revision. Host-tested only |
 | 0.3.10 | Stop delay: microphone kept open 0.5 s after ✓ (0–2 s in « Réglages ») so the last words are not cut; same setting on Linux. Host-tested only |
+| 0.3.11 | Meeting: stop no longer starts the transcription (explicit « Transcrire »), automatic gain at transcription (none/+6/+12/+18 dB, recording kept raw), live level bars while recording. Host-tested only |
 
 ## Agreed scope
 
