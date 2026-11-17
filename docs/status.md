@@ -12,7 +12,7 @@ The **meeting** mode (sequential 2-hour recording, then local transcript to copy
 
 **v0.3.10** is released (16 November 2026, [release notes](releases/v0.3.10.md)): stop delay. Maintainer request: tapping ✓ right after the last word sometimes cut it. After ✓ the microphone now stays open 0.5 s by default, adjustable 0–2 s in « Réglages » (Dictée screen); ✕ and disarming still stop at once. Same setting on Linux (Réglages › Pendant la dictée). Host-tested only (JVM/Robolectric tests, lint, debug APK; Linux unit tests). Precise next action: step 7 of the phone session.
 
-**v0.3.11** is prepared (18 November 2026, [release notes](releases/v0.3.11.md)), maintainer request before a 3-hour Dutch class recorded in two parts: in meeting mode, stop no longer chains into the transcription (« Transcrire » is a separate tap, so a second recording can start at once), an automatic gain applied at transcription only (« Aucun » by default, +6/+12/+18 dB, the recording stays raw so « Retranscrire » can compare), and live level bars while recording. Host-tested only (JVM/Robolectric tests, lint, debug APK). Precise next action: report from the class the duration, final state and message of each recording, the transcription time, and which gain reads better on the Dutch transcript (step 5 of the phone session).
+**v0.3.11** is released (18 November 2026, [release notes](releases/v0.3.11.md)), maintainer request before a 3-hour Dutch class recorded in two parts: in meeting mode, stop no longer chains into the transcription (« Transcrire » is a separate tap, so a second recording can start at once), an automatic gain applied at transcription only (« Aucun » by default, +6/+12/+18 dB, the recording stays raw so « Retranscrire » can compare), and live level bars while recording. Host-tested only (JVM/Robolectric tests, lint, debug APK). Precise next action: report from the class the duration, final state and message of each recording, the transcription time, and which gain reads better on the Dutch transcript (step 5 of the phone session).
 
 Verified on the phone:
 
@@ -34,7 +34,7 @@ A Linux desktop port of the dictation lives in `linux/` (Python, GTK 4/libadwait
 
 ## Next phone session
 
-**Precise next action.** One sitting of about 30 minutes on the Pixel, with the v0.3.10 APK from the GitHub release. Steps and boxes: [acceptation-pixel.md](acceptation-pixel.md). For each step, if something fails, report the « Diagnostic : … » line and the message under « Durée capturée » (dictation), or the state and message in the « Réunion » tab (meeting).
+**Precise next action.** One sitting of about 30 minutes on the Pixel, with the v0.3.11 APK from the GitHub release. Steps and boxes: [acceptation-pixel.md](acceptation-pixel.md). For each step, if something fails, report the « Diagnostic : … » line and the message under « Durée capturée » (dictation), or the state and message in the « Réunion » tab (meeting).
 
 0. **Model preparation** (v0.3.9): on the updated Pixel, « Modèles prêts » with no download. If a phone or work profile without the model is available, « Préparer » downloads about 670 MB and ends « Modèles prêts ».
 1. **Start of speech and soft speech** (v0.3.7, v0.3.8; items 1 and 2): a short phrase spoken right after the tap, three times; then soft, normal and loud voice in one dictation. Note the diagnostic line each time.
