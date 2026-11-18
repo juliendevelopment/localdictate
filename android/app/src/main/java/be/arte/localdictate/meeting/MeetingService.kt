@@ -31,6 +31,9 @@ class MeetingService : Service() {
     @Volatile private var cancelled = false
     @Volatile private var destroyed = false
     @Volatile private var interruption = ""
+    @Volatile private var wallLimit = false
+    /** Wall-clock start of the part being recorded (0 when not recording), for the notification chronometer. */
+    @Volatile private var recordingSince = 0L
     private val stopCause = FirstStopCause()
     private var attached = false
     private var wakeLock: PowerManager.WakeLock? = null
@@ -48,7 +51,12 @@ class MeetingService : Service() {
         controller.service = this
         try {
             val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(NotificationChannel(CHANNEL, "Réunion locale", NotificationManager.IMPORTANCE_LOW))
+            // v0.3.12: default importance without sound, so the icon shows in the status bar (Pixel hides the icons
+            // of low-importance notifications). Channel importance cannot be raised in place: new id, old one removed.
+            manager.deleteNotificationChannel(OLD_CHANNEL)
+            manager.createNotificationChannel(NotificationChannel(CHANNEL, "Réunion en cours", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                setSound(null, null); enableVibration(false); setShowBadge(false)
+            })
             check(manager.areNotificationsEnabled() && manager.getNotificationChannel(CHANNEL)?.importance != NotificationManager.IMPORTANCE_NONE)
             if (request.id == null) check(checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
             // Must precede private IO, AudioRecord and all native model loading.
@@ -95,53 +103,38 @@ class MeetingService : Service() {
         try {
             check(!destroyed)
             if (request.id == null) {
-                wake(PcmRecording.MAX_DURATION_MS + 30_000)
-                persist(repository.create())
-                val recorder = MicrophoneCapture(applicationContext)
-                microphone = recorder
-                if (stopRequested || destroyed) recorder.stop()
-                persist(checkNotNull(session).copy(phase = MeetingPhase.RECORDING, diagnostic = "Enregistrement local ; transcription après arrêt. Accord des participants à votre charge."))
-                timer = scope.launch {
-                    delay(PcmRecording.MAX_DURATION_MS)
-                    interruption = "Durée murale maximale atteinte ; micro arrêté."
-                    recorder.stop()
-                }
-                var lastSaved = 0L
-                var levelAt = 0L
-                var levelPeak = 0f
-                controller.resetLevels()
-                val result = PcmRecording.create(repository.audio(checkNotNull(session).id), repository.guard).use { recording ->
-                    MeetingCapturePipeline(object : MeetingRecorder {
-                        override suspend fun read(emit: (ByteArray) -> Unit) = recorder.read(onSilenced = { silenced ->
-                            if (silenced) { interruption = "Microphone rendu muet par Android ; capture partielle à vérifier."; recorder.stop() }
-                        }, emit = { block ->
-                            // Live bars only: about 12 values per second, the loudest block of each window.
-                            levelPeak = maxOf(levelPeak, Pcm16.level(block.samples))
-                            val now = android.os.SystemClock.elapsedRealtime()
-                            if (now - levelAt >= LEVEL_INTERVAL_MS) {
-                                controller.pushLevel(levelPeak); levelPeak = 0f; levelAt = now
-                            }
-                            emit(block.pcm16)
-                        })
-                        override fun stop() = recorder.stop()
-                    }, append = { recording.append(it) }, duration = { ms ->
-                        controller.update { it.copy(durationMs = ms) }
-                        // Session metadata costs two syncs; the audio itself is synced about every second.
-                        if (ms - lastSaved >= 10_000) {
-                            persist(checkNotNull(session).copy(durationMs = ms)); lastSaved = ms
+                // One recording, or several in a row when « Enchaîner » is on: each part that fills its 2 hours is
+                // closed and a new meeting starts at once in this same foreground service (no new start from the
+                // background). Only a clean 2-hour end chains; a user stop, an error or a silenced microphone ends it.
+                var part = 1
+                while (true) {
+                    wake(PcmRecording.MAX_DURATION_MS + 30_000)
+                    if (part == 1) persist(repository.create()) else {
+                        val next = runCatching { repository.create() }.getOrNull()
+                        if (next == null || stopRequested || cancelled || destroyed) {
+                            if (next != null) runCatching { repository.delete(next.id) }
+                            if (next == null) alertStopped("Enchaînement impossible : espace ou nombre de réunions maximal atteint. " +
+                                "Les ${part - 1} partie(s) déjà enregistrées sont conservées.")
+                            return
                         }
-                    }).run()
+                        persist(next)
+                    }
+                    val result = record(part, ::persist) { checkNotNull(session) }
+                    val capped = result.limitReached || (wallLimit && result.diagnostic.isBlank())
+                    val chain = capped && controller.state.value.chainRecordings && !stopRequested && !cancelled && !destroyed &&
+                        (interruption.isBlank() || wallLimit && interruption == WALL_LIMIT)
+                    val reason = listOf(result.diagnostic, interruption).filter { it.isNotBlank() }.joinToString(" ")
+                    persist(checkNotNull(session).copy(phase = MeetingPhase.RECORDED, durationMs = result.samples * 1000 / 16_000,
+                        diagnostic = (if (part > 1) "Partie $part (suite automatique). " else "") + if (chain)
+                            "Limite de 2 heures atteinte ; la suite continue dans la réunion suivante. Touchez « Transcrire » quand vous voulez."
+                            else reason.ifBlank { "Audio privé sauvegardé. Touchez « Transcrire » quand vous voulez." }))
+                    if (!chain) {
+                        if (!stopRequested && !destroyed) alertStopped(reason.ifBlank { "Enregistrement arrêté." })
+                        return // Transcription is always an explicit, separate action.
+                    }
+                    interruption = ""; wallLimit = false
+                    part++
                 }
-                microphone = null
-                captureStage = false
-                timer.cancel(); timer = null
-                controller.resetLevels()
-                persist(checkNotNull(session).copy(phase = MeetingPhase.RECORDED, durationMs = result.samples * 1000 / 16_000,
-                    diagnostic = listOf(result.diagnostic, interruption).filter { it.isNotBlank() }.joinToString(" ")
-                        .ifBlank { "Audio privé sauvegardé. Touchez « Transcrire » quand vous voulez." }))
-                if (!stopRequested && !destroyed) alertStopped(listOf(result.diagnostic, interruption).filter { it.isNotBlank() }
-                    .joinToString(" ").ifBlank { "Enregistrement arrêté." })
-                return // Transcription is always an explicit, separate action.
             } else {
                 persist(repository.read(request.id))
                 val diagnostic = repository.recoverAudio(request.id) // Explicit UI action, original preserved before repair.
@@ -219,6 +212,57 @@ class MeetingService : Service() {
             scope.cancel()
         }
     }
+    /** Records one part into the current session's spool until stop, the 2-hour limit or a failure. */
+    private suspend fun record(part: Int, persist: (MeetingSession) -> Unit, session: () -> MeetingSession): CaptureResult {
+        val repository = controller.repository
+        val recorder = MicrophoneCapture(applicationContext)
+        microphone = recorder
+        if (stopRequested || destroyed) recorder.stop()
+        persist(session().copy(phase = MeetingPhase.RECORDING, diagnostic = (if (part > 1) "Partie $part (suite automatique). " else "") +
+            "Enregistrement local ; transcription après arrêt. Accord des participants à votre charge."))
+        recordingSince = System.currentTimeMillis()
+        notifyProgress(if (part > 1) "Partie $part" else "Micro actif")
+        val timer = scope.launch {
+            delay(PcmRecording.MAX_DURATION_MS)
+            wallLimit = true
+            interruption = WALL_LIMIT
+            recorder.stop()
+        }
+        try {
+            var lastSaved = 0L
+            var levelAt = 0L
+            var levelPeak = 0f
+            controller.resetLevels()
+            return PcmRecording.create(repository.audio(session().id), repository.guard).use { recording ->
+                MeetingCapturePipeline(object : MeetingRecorder {
+                    override suspend fun read(emit: (ByteArray) -> Unit) = recorder.read(onSilenced = { silenced ->
+                        if (silenced) { interruption = "Microphone rendu muet par Android ; capture partielle à vérifier."; recorder.stop() }
+                    }, emit = { block ->
+                        // Live bars only: about 12 values per second, the loudest block of each window.
+                        levelPeak = maxOf(levelPeak, Pcm16.level(block.samples))
+                        val now = android.os.SystemClock.elapsedRealtime()
+                        if (now - levelAt >= LEVEL_INTERVAL_MS) {
+                            controller.pushLevel(levelPeak); levelPeak = 0f; levelAt = now
+                        }
+                        emit(block.pcm16)
+                    })
+                    override fun stop() = recorder.stop()
+                }, append = { recording.append(it) }, duration = { ms ->
+                    controller.update { it.copy(durationMs = ms) }
+                    // Session metadata costs two syncs; the audio itself is synced about every second.
+                    if (ms - lastSaved >= 10_000) {
+                        persist(session().copy(durationMs = ms)); lastSaved = ms
+                    }
+                }).run()
+            }
+        } finally {
+            timer.cancel()
+            recorder.stop()
+            recordingSince = 0L
+            microphone = null // captureStage stays on between parts: a stop then ends the chain, never cancels.
+            controller.resetLevels()
+        }
+    }
     private fun promote(recording: Boolean) {
         val type = if (recording) ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
             else if (Build.VERSION.SDK_INT >= 35) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROCESSING
@@ -229,20 +273,28 @@ class MeetingService : Service() {
     private fun alertStopped(reason: String) = runCatching {
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel(ALERT_CHANNEL, "Réunion arrêtée", NotificationManager.IMPORTANCE_HIGH))
-        val open = PendingIntent.getActivity(this, 22, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
-        manager.notify(ALERT_NOTIFICATION, Notification.Builder(this, ALERT_CHANNEL).setSmallIcon(R.drawable.ic_launcher)
+        val open = PendingIntent.getActivity(this, 22, MainActivity.openMeeting(this), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        manager.notify(ALERT_NOTIFICATION, Notification.Builder(this, ALERT_CHANNEL).setSmallIcon(R.drawable.ic_stat_meeting)
             .setContentTitle("Enregistrement de réunion arrêté").setContentText(reason)
             .setStyle(Notification.BigTextStyle().bigText("$reason Le son capté jusqu’ici est conservé ; relancez un enregistrement pour la suite."))
             .setContentIntent(open).setAutoCancel(true).build())
     }
     private fun notifyProgress(message: String) = getSystemService(NotificationManager::class.java).notify(NOTIFICATION, notification(message))
     private fun notification(message: String): Notification {
-        val open = PendingIntent.getActivity(this, 20, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+        // Opens the app on the « Réunion » tab (existing activity brought forward, not a second one).
+        val open = PendingIntent.getActivity(this, 20, MainActivity.openMeeting(this), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val stop = PendingIntent.getService(this, 21, Intent(this, MeetingService::class.java).setAction(STOP)
             .putExtra(FROM_NOTIFICATION, true), PendingIntent.FLAG_IMMUTABLE)
-        return Notification.Builder(this, CHANNEL).setSmallIcon(R.drawable.ic_launcher)
-            .setContentTitle("LocalDictate — Réunion").setContentText(message).setOngoing(true).setOnlyAlertOnce(true)
-            .setContentIntent(open).addAction(Notification.Action.Builder(null, "Arrêter / annuler", stop).build()).build()
+        val since = recordingSince
+        val builder = Notification.Builder(this, CHANNEL).setSmallIcon(R.drawable.ic_stat_meeting)
+            .setOngoing(true).setOnlyAlertOnce(true).setContentIntent(open)
+            .setCategory(Notification.CATEGORY_SERVICE)
+        if (since > 0) builder.setContentTitle("● Réunion en cours d’enregistrement").setContentText("$message • touchez pour ouvrir")
+            .setWhen(since).setShowWhen(true).setUsesChronometer(true) // Elapsed time ticking in the shade.
+            .addAction(Notification.Action.Builder(null, "Arrêter l’enregistrement", stop).build())
+        else builder.setContentTitle("LocalDictate — Réunion").setContentText(message)
+            .addAction(Notification.Action.Builder(null, "Annuler le traitement", stop).build())
+        return builder.build()
     }
     override fun onTimeout(startId: Int, fgsType: Int) {
         stopCause.record(MeetingStopCause.FOREGROUND_TIMEOUT)
@@ -265,11 +317,13 @@ class MeetingService : Service() {
         const val START = "be.arte.localdictate.MEETING_START"
         const val STOP = "be.arte.localdictate.MEETING_STOP"
         private const val FROM_NOTIFICATION = "fromNotification"
-        const val CHANNEL = "meeting"
+        const val CHANNEL = "meeting-active"
+        private const val OLD_CHANNEL = "meeting"
         const val NOTIFICATION = 20
         const val ALERT_CHANNEL = "meeting-alerts"
         const val ALERT_NOTIFICATION = 23
         const val PROCESS_TIMEOUT_MS = 6L * 60 * 60 * 1000
         private const val LEVEL_INTERVAL_MS = 80L
+        private const val WALL_LIMIT = "Durée murale maximale atteinte ; micro arrêté."
     }
 }

@@ -14,6 +14,8 @@ The **meeting** mode (sequential 2-hour recording, then local transcript to copy
 
 **v0.3.11** is released (18 November 2026, [release notes](releases/v0.3.11.md)), maintainer request before a 3-hour Dutch class recorded in two parts: in meeting mode, stop no longer chains into the transcription (« Transcrire » is a separate tap, so a second recording can start at once), an automatic gain applied at transcription only (« Aucun » by default, +6/+12/+18 dB, the recording stays raw so « Retranscrire » can compare), and live level bars while recording. Host-tested only (JVM/Robolectric tests, lint, debug APK). Precise next action: report from the class the duration, final state and message of each recording, the transcription time, and which gain reads better on the Dutch transcript (step 5 of the phone session).
 
+**v0.3.12** is prepared (18 November 2026, [release notes](releases/v0.3.12.md)), maintainer requests: optional chaining of meeting recordings at the 2-hour limit (off by default, same foreground service, a fraction of a second may be lost between parts), a visible meeting notification (status-bar microphone icon, chronometer, tap opens the « Réunion » tab), and the bubble's drop-on-✕ fixed (finger compared with the ✕ as drawn, instead of a position computed from the display height). Host-tested only; the ✕ fix and the status-bar icon can only be confirmed on the phone. Precise next action: drag the bubble onto the ✕ (it must disappear, and come back on unlock); start a meeting and check the status-bar icon, the chronometer and that a tap opens « Réunion ».
+
 Verified on the phone:
 
 - installation (after pausing Play Protect scanning) and in-place updates with the same key;
@@ -99,6 +101,7 @@ Procedure: [ci.md](ci.md#releases). Never move a tag whose release exists. Versi
 | 0.3.9 | « Mes mots »: user hotwords (beam search) and replacements, dictation and meeting; models downloaded per file from an immutable Hugging Face revision. Host-tested only |
 | 0.3.10 | Stop delay: microphone kept open 0.5 s after ✓ (0–2 s in « Réglages ») so the last words are not cut; same setting on Linux. Host-tested only |
 | 0.3.11 | Meeting: stop no longer starts the transcription (explicit « Transcrire »), automatic gain at transcription (none/+6/+12/+18 dB, recording kept raw), live level bars while recording. Host-tested only |
+| 0.3.12 | Meeting: optional chaining at the 2-hour limit (off by default), visible notification with status-bar icon and chronometer opening « Réunion »; bubble drop-on-✕ fixed. Host-tested only |
 
 ## Agreed scope
 

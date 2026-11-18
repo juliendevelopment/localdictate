@@ -21,6 +21,8 @@ data class MeetingState(
     val processedMs: Long = 0, val message: String = "Aucun enregistrement automatique.", val error: String? = null,
     /** Ceiling of the automatic gain used by the next transcription (see [MeetingGain]). */
     val gainDb: Int = MeetingGain.DEFAULT_DB,
+    /** At the 2-hour limit, close the recording and start the next one at once (off by default). */
+    val chainRecordings: Boolean = false,
 )
 data class MeetingLaunch(val token: String, val id: String?)
 
@@ -40,12 +42,17 @@ class MeetingController(private val app: Application, private val dictation: Dic
     init {
         runCatching { MeetingGain.clamp(preferences.getInt(GAIN_DB, MeetingGain.DEFAULT_DB)) }
             .onSuccess { db -> mutable.update { it.copy(gainDb = db) } }
+        runCatching { preferences.getBoolean(CHAIN, false) }.onSuccess { chain -> mutable.update { it.copy(chainRecordings = chain) } }
         scope.launch { refresh() }
     }
     fun saveGain(db: Int) {
         val gain = MeetingGain.clamp(db)
         preferences.edit().putInt(GAIN_DB, gain).apply()
         update { it.copy(gainDb = gain) }
+    }
+    fun saveChain(enabled: Boolean) {
+        preferences.edit().putBoolean(CHAIN, enabled).apply()
+        update { it.copy(chainRecordings = enabled) }
     }
     internal fun pushLevel(level: Float) = levelHistory.update { it.drop(1) + level }
     internal fun resetLevels() { levelHistory.value = List(LEVEL_BARS) { 0f } }
@@ -135,6 +142,7 @@ class MeetingController(private val app: Application, private val dictation: Dic
     }
     private companion object {
         const val GAIN_DB = "meeting_gain_db"
+        const val CHAIN = "meeting_chain_recordings"
         const val LEVEL_BARS = 32
     }
 }

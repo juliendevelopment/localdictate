@@ -122,6 +122,20 @@ class MainActivityTest {
             meetings.saveGain(0)
         }
     }
+    @Test fun chainingRecordingsIsOffByDefaultAndSavedPrivately() {
+        val meetings = (compose.activity.application as DictateApplication).meetings
+        compose.runOnIdle { assertFalse(meetings.state.value.chainRecordings) }
+        compose.onNodeWithTag("mode-meeting").performClick()
+        compose.onNodeWithTag("meeting-chain").performScrollTo().assertIsOff().performClick()
+        compose.onNodeWithTag("meeting-chain").assertIsOn()
+        compose.runOnIdle {
+            assertTrue(meetings.state.value.chainRecordings)
+            assertTrue(compose.activity.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
+                .getBoolean("meeting_chain_recordings", false))
+            assertNull(shadowOf(compose.activity).nextStartedService)
+            meetings.saveChain(false)
+        }
+    }
     @Test fun recordingMeetingShowsLiveLevelAndStopsWithoutTranscribing() {
         val meetings = (compose.activity.application as DictateApplication).meetings
         compose.runOnIdle {

@@ -65,5 +65,21 @@ class MeetingCapturePipelineTest {
             maxSamples = 8_000).run()
         assertEquals(8_000L, result.samples)
         assertTrue(result.diagnostic.startsWith("Limite de 2 heures"))
+        assertTrue("a clean limit may chain the next part", result.limitReached)
+    }
+
+    @Test fun onlyACleanLimitAllowsChaining() = runBlocking {
+        val short = MeetingCapturePipeline(FakeRecorder(blocks = 10, samples = 80),
+            append = { AudioAppendResult(it.size.toLong(), 0, false) }, maxSamples = 8_000).run()
+        assertFalse("a stop before the limit never chains", short.limitReached)
+        val recorder = FakeRecorder(blocks = 2_000, samples = 80)
+        var stalled = true
+        val failed = MeetingCapturePipeline(recorder, append = { block ->
+            while (stalled && !recorder.stopped.get()) Thread.sleep(1)
+            stalled = false
+            AudioAppendResult(block.size.toLong(), 0, false)
+        }, maxPendingBytes = 96_000, maxSamples = 100_000).run() // The stall (48,000 samples) comes first.
+        assertTrue(failed.diagnostic, failed.diagnostic.startsWith("Écriture disque bloquée"))
+        assertFalse("a disk failure never chains", failed.limitReached)
     }
 }

@@ -11,7 +11,8 @@ interface MeetingRecorder {
     suspend fun read(emit: (ByteArray) -> Unit)
     fun stop()
 }
-data class CaptureResult(val samples: Long, val diagnostic: String)
+/** [limitReached]: the 2-hour budget was filled and nothing else went wrong (the only case a chained part may follow). */
+data class CaptureResult(val samples: Long, val diagnostic: String, val limitReached: Boolean = false)
 
 /**
  * Capture never waits for disk. The microphone delivers small blocks (often a few milliseconds each); the queue is
@@ -53,7 +54,7 @@ class MeetingCapturePipeline(
                         queue.trySend(block) // Never fails while open: accepted audio is always drained.
                     }
                     if (queued.get() == maxSamples * 2) {
-                        fail("Limite de 2 heures atteinte ; capture arrêtée.")
+                        fail(LIMIT_MESSAGE)
                     }
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
@@ -94,8 +95,10 @@ class MeetingCapturePipeline(
         try { joinAll(producer, writer) }
         finally { recorder.stop(); queue.cancel() }
         val missing = (queued.get() - written.get()).coerceAtLeast(0)
-        CaptureResult(written.get() / 2, failure.get() + if (missing > 0) " $missing octets acceptés en RAM non acquittés sur disque." else "")
+        CaptureResult(written.get() / 2, failure.get() + if (missing > 0) " $missing octets acceptés en RAM non acquittés sur disque." else "",
+            limitReached = written.get() == maxSamples * 2 && failure.get().let { it.isEmpty() || it == LIMIT_MESSAGE })
     }
+    companion object { const val LIMIT_MESSAGE = "Limite de 2 heures atteinte ; capture arrêtée." }
 }
 
 data class MeetingSpeech(val startSample: Long, val samples: FloatArray, val endSample: Long = startSample + samples.size)

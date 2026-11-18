@@ -20,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -52,6 +53,8 @@ class DictationViewModel(application: Application) : ViewModel() {
 
 class MainActivity : ComponentActivity() {
     private var readiness by mutableStateOf(Readiness())
+    /** Bumped when the meeting notification is tapped: the screen switches to the « Réunion » tab. */
+    private var meetingRequest by mutableIntStateOf(0)
     private val controller get() = (application as DictateApplication).controller
     private val meetings get() = (application as DictateApplication).meetings
     private val permissions = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
@@ -59,6 +62,7 @@ class MainActivity : ComponentActivity() {
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (savedInstanceState == null) handleOpen(intent)
         setContent {
             val model: DictationViewModel = viewModel(factory = DictationViewModel.Factory(application))
             val state by model.controller.state.collectAsState()
@@ -89,9 +93,21 @@ class MainActivity : ComponentActivity() {
                     deleteMeeting = model.meetings::delete,
                     copyMeeting = model.meetings::copyTranscript,
                     exportMeeting = { id, wav -> model.meetings.export(id, wav) { startActivity(it) } },
-                    meetingLevels = meetingLevels, saveMeetingGain = model.meetings::saveGain)
+                    meetingLevels = meetingLevels, saveMeetingGain = model.meetings::saveGain,
+                    saveMeetingChain = model.meetings::saveChain, meetingRequest = meetingRequest)
             }
         }
+    }
+    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); handleOpen(intent) }
+    private fun handleOpen(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_MEETING, false) == true) meetingRequest++
+    }
+    companion object {
+        private const val EXTRA_MEETING = "be.arte.localdictate.OPEN_MEETING"
+        /** Notification target: existing activity brought to the front on the « Réunion » tab. */
+        fun openMeeting(context: android.content.Context): Intent = Intent(context, MainActivity::class.java)
+            .putExtra(EXTRA_MEETING, true)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
     }
     override fun onResume() { super.onResume(); refreshPermissions() }
     private fun refreshPermissions() {
@@ -161,6 +177,7 @@ private fun HomeScreen(
     unselectMeeting: () -> Unit, deleteMeeting: (String) -> Unit, copyMeeting: (String) -> Unit,
     exportMeeting: (String, Boolean) -> Unit,
     meetingLevels: List<Float> = emptyList(), saveMeetingGain: (Int) -> Unit = {},
+    saveMeetingChain: (Boolean) -> Unit = {}, meetingRequest: Int = 0,
 ) {
     var meeting by rememberSaveable { mutableStateOf(false) }
     var disclosure by rememberSaveable { mutableStateOf(false) }
@@ -170,6 +187,7 @@ private fun HomeScreen(
     val scroll = rememberScrollState()
     // Each mode opens at its top, where its main button is (the other mode's scroll position means nothing here).
     LaunchedEffect(meeting) { scroll.scrollTo(0) }
+    LaunchedEffect(meetingRequest) { if (meetingRequest > 0) meeting = true }
     Surface(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -347,6 +365,7 @@ private fun HomeScreen(
             if (meeting && !meetingState.busy) {
                 HorizontalDivider()
                 MeetingGainSection(meetingState.gainDb, saveMeetingGain)
+                MeetingChainSection(meetingState.chainRecordings, saveMeetingChain)
             }
             if (!meeting) {
                 HorizontalDivider()
@@ -449,6 +468,16 @@ private fun MeetingGainSection(saved: Int, save: (Int) -> Unit) {
         }
     }
     Text("Monte les voix lointaines ou faibles (un professeur au fond de la salle) sans jamais saturer. Le son enregistré n’est pas modifié : vous pouvez retranscrire la même réunion avec un autre réglage.")
+}
+
+/** Optional chaining of 2-hour recordings (off by default; see MeetingService). */
+@Composable
+private fun MeetingChainSection(enabled: Boolean, save: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text("Enchaîner les enregistrements", Modifier.weight(1f))
+        Switch(checked = enabled, onCheckedChange = save, modifier = Modifier.testTag("meeting-chain"))
+    }
+    Text("À la limite de 2 heures, l’enregistrement est clôturé et un nouveau démarre aussitôt (une fraction de seconde peut manquer entre les deux). Chaque partie se transcrit à part. S’arrête si l’espace ou le nombre de réunions (20) est atteint. Désactivé par défaut.")
 }
 
 /** Microphone kept open after ✓ so the last words are not cut (see StopDelay). */

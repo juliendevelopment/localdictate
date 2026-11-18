@@ -201,14 +201,14 @@ class FloatingControl(
                         params.x = (startX + dx.toInt()).coerceIn(0, (screenWidth() - root.width).coerceAtLeast(0))
                         params.y = (startY + dy.toInt()).coerceIn(0, (screenHeight() - root.height).coerceAtLeast(0))
                         runCatching { manager.updateViewLayout(root, params) }
-                        if (targetShown) target.scaleX = if (overTarget()) 1.25f else 1f
+                        if (targetShown) target.scaleX = if (overTarget(event.rawX, event.rawY)) 1.25f else 1f
                         target.scaleY = target.scaleX
                     }
                 }
                 MotionEvent.ACTION_UP -> {
                     if (!dragging) view.performClick()
                     else {
-                        val dismiss = targetShown && overTarget()
+                        val dismiss = targetShown && overTarget(event.rawX, event.rawY)
                         showTarget(false)
                         if (dismiss) hide() else {
                             dockRight = params.x + root.width / 2 > screenWidth() / 2
@@ -226,12 +226,17 @@ class FloatingControl(
     /** Hiding is allowed only when no dictation is running. */
     private fun dismissible() = mode == Mode.IDLE || mode == Mode.ATTENTION || mode == Mode.LOADING
 
-    private fun overTarget(): Boolean {
-        val bubbleX = params.x + root.width / 2f
-        val bubbleY = params.y + row.height / 2f
-        val targetX = screenWidth() / 2f
-        val targetY = screenHeight() - dp(72) - dp(TARGET) / 2f
-        return hypot(bubbleX - targetX, bubbleY - targetY) < dp(TARGET)
+    /**
+     * Finger position against the ✕ as actually drawn on screen. Until v0.3.11 this compared the bubble's window
+     * coordinates with a target position computed from the display height, but the target window sits above the
+     * navigation bar and the bubble's origin below the status bar: on a Pixel the gap exceeded the tolerance and
+     * dropping the bubble on the ✕ did nothing.
+     */
+    private fun overTarget(rawX: Float, rawY: Float): Boolean {
+        if (!targetShown || target.width == 0) return false
+        val origin = IntArray(2)
+        target.getLocationOnScreen(origin)
+        return hypot(rawX - (origin[0] + target.width / 2f), rawY - (origin[1] + target.height / 2f)) < dp(TARGET)
     }
 
     private fun showTarget(visible: Boolean) {
