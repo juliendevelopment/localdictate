@@ -18,3 +18,16 @@ class SessionBudget(private val mode: SessionMode) {
 
     fun isExhausted(elapsedMs: Long): Boolean = remainingMs(elapsedMs) == 0L
 }
+
+/**
+ * The bubble turns red during the last minute of a dictation; at the limit the capture stops by itself and the text
+ * follows the same path as a tap on ✓ (history, then insertion or clipboard). Durations are captured audio, in ms.
+ */
+object DictationLimit {
+    const val WARNING_MS = 14L * 60L * 1_000L
+    val MAX_MS = SessionMode.DICTATION.maxDurationMs
+
+    fun warns(durationMs: Long): Boolean = durationMs in WARNING_MS until MAX_MS
+    fun reached(durationMs: Long): Boolean = durationMs >= MAX_MS
+    fun remainingMs(durationMs: Long): Long = SessionBudget(SessionMode.DICTATION).remainingMs(durationMs.coerceAtLeast(0))
+}

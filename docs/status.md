@@ -16,6 +16,8 @@ The **meeting** mode (sequential 2-hour recording, then local transcript to copy
 
 **v0.3.12** is released (18 November 2026, [release notes](releases/v0.3.12.md)), maintainer requests: optional chaining of meeting recordings at the 2-hour limit (off by default, same foreground service, a fraction of a second may be lost between parts), a visible meeting notification (status-bar microphone icon, chronometer, tap opens the « Réunion » tab), and the bubble's drop-on-✕ fixed (finger compared with the ✕ as drawn, instead of a position computed from the display height). Host-tested only; the ✕ fix and the status-bar icon can only be confirmed on the phone. Precise next action: drag the bubble onto the ✕ (it must disappear, and come back on unlock); start a meeting and check the status-bar icon, the chronometer and that a tap opens « Réunion ».
 
+**Unreleased** (maintainer request, 20 November 2026): during the last minute of a dictation (from 14:00 of captured audio) the bubble's pill turns red and shows « Arrêt automatique dans m:ss • texte conservé »; at 15:00 the microphone stops by itself and the text follows exactly the ✓ path (history first, then insertion at the cursor, otherwise automatic copy to the clipboard), with « Limite de 15 minutes atteinte. » in front of the outcome message. Host-tested only (Robolectric bubble render, limit boundaries, existing pipeline test that the budget stop raises no error). Precise next action: on the phone, one dictation past 15 minutes in Keep: red pill and countdown from 14:00, automatic stop at 15:00, text inserted (or copied) and in the history.
+
 Verified on the phone:
 
 - installation (after pausing Play Protect scanning) and in-place updates with the same key;

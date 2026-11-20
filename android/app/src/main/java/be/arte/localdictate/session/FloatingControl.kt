@@ -14,6 +14,7 @@ import android.view.*
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
+import be.arte.localdictate.formatClock
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.abs
 import kotlin.math.hypot
@@ -93,6 +94,7 @@ class FloatingControl(
     private var targetShown = false
     private var screenKept = false
     private var shownStatus = ""
+    private var warned = false
     private val hideStatus = Runnable { status.visibility = View.GONE }
     private val pendingLevel = AtomicBoolean(false)
     @Volatile private var lastLevel = 0f
@@ -133,16 +135,13 @@ class FloatingControl(
             Phase.ARMED -> if (state.transcript.isNotEmpty() || state.error != null) Mode.ATTENTION else Mode.IDLE
             Phase.OFF -> Mode.LOADING
         }
-        if (next != mode) {
+        val modeChanged = next != mode
+        if (modeChanged) {
             mode = next
             val pill = mode == Mode.RECORDING || mode == Mode.PROCESSING
             cancel.visibility = if (mode == Mode.RECORDING) View.VISIBLE else View.GONE
             confirm.visibility = if (mode == Mode.RECORDING) View.VISIBLE else View.GONE
             center.layoutParams = (center.layoutParams as LinearLayout.LayoutParams).apply { width = dp(if (pill) PILL else BUTTON) }
-            center.background = GradientDrawable().apply {
-                cornerRadius = dp(if (pill) BUTTON / 2 else 18).toFloat()
-                setColor(if (mode == Mode.ATTENTION) AMBER else LAVENDER)
-            }
             center.alpha = if (mode == Mode.LOADING) 0.55f else 1f
             label.visibility = if (mode == Mode.ATTENTION) View.VISIBLE else View.GONE
             label.text = "!"
@@ -161,18 +160,39 @@ class FloatingControl(
             }
             root.post { dock() }
         }
+        // Last minute of a dictation: the pill turns red and counts down to the automatic stop.
+        val warning = mode == Mode.RECORDING && DictationLimit.warns(state.durationMs)
+        if (modeChanged || warning != warned) {
+            warned = warning
+            val pill = mode == Mode.RECORDING || mode == Mode.PROCESSING
+            center.background = GradientDrawable().apply {
+                cornerRadius = dp(if (pill) BUTTON / 2 else 18).toFloat()
+                setColor(when {
+                    mode == Mode.ATTENTION -> AMBER
+                    warning -> RED
+                    else -> LAVENDER
+                })
+            }
+        }
         keepScreenOn(mode == Mode.RECORDING || mode == Mode.PROCESSING)
         if (mode == Mode.RECORDING && !state.micLive) wave.style = WaveView.Style.DOTS
         else if (mode == Mode.RECORDING) wave.style = WaveView.Style.LIVE
-        val message = state.error ?: state.notice
-            ?: if (mode == Mode.ATTENTION) "Texte conservé • touchez pour ouvrir" else ""
+        val limitReached = mode == Mode.PROCESSING && DictationLimit.reached(state.durationMs)
+        val message = state.error ?: state.notice ?: when {
+            mode == Mode.ATTENTION -> "Texte conservé • touchez pour ouvrir"
+            warning -> "Arrêt automatique dans ${formatClock(DictationLimit.remainingMs(state.durationMs))} • texte conservé"
+            limitReached -> "15 minutes atteintes • micro coupé, texte en traitement"
+            else -> ""
+        }
         if (message != shownStatus) {
             shownStatus = message
             main.removeCallbacks(hideStatus)
             status.text = message
             status.visibility = if (message.isEmpty()) View.GONE else View.VISIBLE
             // Short outcomes fade; errors and kept text stay until the state changes.
-            if (message.isNotEmpty() && state.error == null && mode != Mode.ATTENTION) main.postDelayed(hideStatus, 5_000)
+            // The countdown and the limit notice stay as long as they apply.
+            if (message.isNotEmpty() && state.error == null && mode != Mode.ATTENTION && !warning && !limitReached)
+                main.postDelayed(hideStatus, 5_000)
         }
     }
 
@@ -288,6 +308,7 @@ class FloatingControl(
         const val MARGIN = 8
         val LAVENDER = Color.argb(240, 201, 187, 214)
         val AMBER = Color.argb(240, 240, 200, 120)
+        val RED = Color.argb(240, 229, 83, 75)
         val PURPLE = Color.rgb(110, 75, 168)
         val INK = Color.rgb(43, 37, 51)
     }

@@ -40,4 +40,14 @@ class SessionBudgetTest {
             SessionBudget(SessionMode.DICTATION).remainingMs(-1)
         }
     }
+    @Test fun lastMinuteWarnsThenTheLimitIsReached() {
+        assertFalse(DictationLimit.warns(839_999L))
+        assertTrue(DictationLimit.warns(840_000L))
+        assertTrue(DictationLimit.warns(899_999L))
+        assertFalse(DictationLimit.warns(900_000L))
+        assertFalse(DictationLimit.reached(899_999L))
+        assertTrue(DictationLimit.reached(900_000L))
+        assertEquals(60_000L, DictationLimit.remainingMs(840_000L))
+        assertEquals(0L, DictationLimit.remainingMs(901_000L))
+    }
 }

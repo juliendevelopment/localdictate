@@ -53,6 +53,8 @@ class FloatingControlTest {
             "processing" to DictationState(phase = Phase.PROCESSING),
             "not-inserted" to DictationState(phase = Phase.ARMED, notice = "Non inséré • texte copié, collez-le"),
             "kept-text" to DictationState(phase = Phase.ARMED, transcript = "texte"),
+            "last-minute" to DictationState(phase = Phase.RECORDING, micLive = true, durationMs = 855_000),
+            "limit-reached" to DictationState(phase = Phase.PROCESSING, durationMs = 900_000),
         )
         for ((name, state) in states) {
             bubble.render(state)
@@ -84,6 +86,40 @@ class FloatingControlTest {
         assertTrue(windows.isEmpty())
         bubble.show()
         assertEquals(1, windows.size)
+        bubble.close()
+    }
+
+    @Test fun lastMinuteTurnsThePillRedWithAPersistentCountdown() {
+        val bubble = FloatingControl(context, {}, {}, {}, {})
+        val root = windows.single()
+        val views = mutableListOf<View>()
+        fun collect(view: View) {
+            views += view
+            if (view is android.view.ViewGroup) for (i in 0 until view.childCount) collect(view.getChildAt(i))
+        }
+        bubble.render(DictationState(phase = Phase.RECORDING, micLive = true, durationMs = 839_000))
+        collect(root)
+        val center = views.first { it is android.widget.FrameLayout && it.contentDescription != null }
+        fun color() = (center.background as android.graphics.drawable.GradientDrawable).color!!.defaultColor
+        fun status() = views.filterIsInstance<android.widget.TextView>()
+            .firstOrNull { it.visibility == View.VISIBLE && it.text.length > 2 }?.text?.toString()
+        bubble.render(DictationState(phase = Phase.RECORDING, micLive = true, durationMs = 839_000))
+        val normal = color()
+        assertEquals(null, status())
+        bubble.render(DictationState(phase = Phase.RECORDING, micLive = true, durationMs = 840_000))
+        val red = color()
+        assertTrue(red != normal)
+        assertEquals("Arrêt automatique dans 1:00 • texte conservé", status())
+        bubble.render(DictationState(phase = Phase.RECORDING, micLive = true, durationMs = 885_000))
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(10))
+        assertEquals("Arrêt automatique dans 0:15 • texte conservé", status()) // Never faded while it applies.
+        assertEquals(red, color())
+        bubble.render(DictationState(phase = Phase.PROCESSING, durationMs = 900_000))
+        assertEquals(normal, color())
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(10))
+        assertEquals("15 minutes atteintes • micro coupé, texte en traitement", status())
+        bubble.render(DictationState(phase = Phase.ARMED, notice = "Non inséré • texte copié, collez-le"))
+        assertEquals("Non inséré • texte copié, collez-le", status())
         bubble.close()
     }
 }

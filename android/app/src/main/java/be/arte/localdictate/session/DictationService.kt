@@ -207,7 +207,9 @@ class DictationService : Service() {
                     controller.count(record.text, controller.state.value.durationMs)
                 }
                 val service = targetService
-                val message = when {
+                // Reaching the limit is a normal stop (same path as ✓); the outcome only says why it ended.
+                val limit = if (DictationLimit.reached(controller.state.value.durationMs)) "Limite de 15 minutes atteinte. " else ""
+                val outcome = when {
                     interrupted -> "Dictée interrompue ou surchargée : vérifiez le texte récupéré, aucun collage automatique."
                     record.text.isBlank() -> "Aucune parole reconnue. Vous pouvez réessayer."
                     cancelled -> "Dictée annulée : rien n’est inséré ni copié."
@@ -218,10 +220,11 @@ class DictationService : Service() {
                         if (claimed) service.insert(record.text) else "Insertion déjà tentée ou interrompue : vérifiez le champ."
                     }
                 }
-                if (message == InsertionService.OBSERVED) {
+                val message = limit + outcome
+                if (outcome == InsertionService.OBSERVED) {
                     // Inserted and observed: nothing left to recover, so the next dictation can start.
                     withContext(NonCancellable + Dispatchers.IO) { controller.journal.clear() }
-                    controller.update { it.copy(transcript = "", notice = null, message = "Texte inséré dans le champ.") }
+                    controller.update { it.copy(transcript = "", notice = null, message = limit + "Texte inséré dans le champ.") }
                 } else if (record.text.isNotBlank()) {
                     // Not confirmed: copy automatically so the text can be pasted by hand.
                     val copied = !cancelled && runCatching { PrivateClipboard(applicationContext).put(record.text) }.isSuccess

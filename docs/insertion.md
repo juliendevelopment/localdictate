@@ -5,7 +5,7 @@ This is the reference on automatic insertion of dictated text. It records the ma
 ## Expected flow
 
 1. Arm the bubble once from the app.
-2. In any app: place the cursor, tap the bubble, speak (up to 15 minutes, often 5 to 10), tap **✓**.
+2. In any app: place the cursor, tap the bubble, speak (up to 15 minutes, often 5 to 10; the pill turns red with a countdown for the last minute and the dictation ends by itself at 15:00, exactly as with ✓), tap **✓**.
 3. The text appears at the cursor; the bubble is immediately ready for the next dictation, without going back to the app.
 4. If something goes wrong, the text is in the clipboard (long press → Paste) and in the app (last 5 texts). **A dictation must never be lost**: repeating 10 minutes of speech is not acceptable.
 

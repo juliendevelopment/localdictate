@@ -2,6 +2,7 @@ package be.arte.localdictate.asr
 
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
+import be.arte.localdictate.session.SessionMode
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
@@ -14,7 +15,7 @@ interface SpeechSegmenter {
     fun finish(): List<FloatArray>
 }
 
-class CaptureBudget(private val maxSamples: Long = 16_000L * 60 * 15) {
+class CaptureBudget(private val maxSamples: Long = 16L * SessionMode.DICTATION.maxDurationMs) {
     var capturedSamples = 0L
         private set
     val exhausted get() = capturedSamples >= maxSamples
