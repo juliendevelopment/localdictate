@@ -19,5 +19,6 @@ Read `docs/mvp.md`, `docs/architecture.md`, `docs/ci.md` and `docs/status.md` be
 - Linux: Python 3.12–3.14, runtime wheels pinned with hashes in `linux/requirements.lock`; system PyGObject/GTK/GStreamer. Tests: `python -m unittest discover -s tests -t .` from `linux/`; the real-engine test needs `LOCALDICTATE_TEST_MODELS`. A host test proves neither the portals on a real desktop nor paste in other apps.
 - JDK 17, pinned wrapper and dependencies. Use the wrapper, not a global Gradle.
 - Small commits `type: description`. Push only this project's content.
+- When the maintainer asks to push, that means a release: release notes, push to `main`, green **Android Build** on that SHA, then the `android-vX.Y.Z` tag (see `docs/ci.md`). The maintainer always installs the APK built by GitHub, never a local build.
 - After a change: JVM tests, real activity under Robolectric, lint and APK; green CI for the exact SHA. A host test proves neither JNI, insertion in other apps, nor endurance on a phone.
 - Later phases are not delivered by a green skeleton. Update `docs/status.md` with the precise next action and the remaining checks.

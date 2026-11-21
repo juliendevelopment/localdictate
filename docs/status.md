@@ -16,7 +16,7 @@ The **meeting** mode (sequential 2-hour recording, then local transcript to copy
 
 **v0.3.12** is released (18 November 2026, [release notes](releases/v0.3.12.md)), maintainer requests: optional chaining of meeting recordings at the 2-hour limit (off by default, same foreground service, a fraction of a second may be lost between parts), a visible meeting notification (status-bar microphone icon, chronometer, tap opens the « Réunion » tab), and the bubble's drop-on-✕ fixed (finger compared with the ✕ as drawn, instead of a position computed from the display height). Host-tested only; the ✕ fix and the status-bar icon can only be confirmed on the phone. Precise next action: drag the bubble onto the ✕ (it must disappear, and come back on unlock); start a meeting and check the status-bar icon, the chronometer and that a tap opens « Réunion ».
 
-**Unreleased** (maintainer request, 20 November 2026): during the last minute of a dictation (from 14:00 of captured audio) the bubble's pill turns red and shows « Arrêt automatique dans m:ss • texte conservé »; at 15:00 the microphone stops by itself and the text follows exactly the ✓ path (history first, then insertion at the cursor, otherwise automatic copy to the clipboard), with « Limite de 15 minutes atteinte. » in front of the outcome message. Host-tested only (Robolectric bubble render, limit boundaries, existing pipeline test that the budget stop raises no error). Precise next action: on the phone, one dictation past 15 minutes in Keep: red pill and countdown from 14:00, automatic stop at 15:00, text inserted (or copied) and in the history.
+**v0.3.13** is released (21 November 2026, [release notes](releases/v0.3.13.md)), maintainer request: during the last minute of a dictation (from 14:00 of captured audio) the bubble's pill turns red and shows « Arrêt automatique dans m:ss • texte conservé »; at 15:00 the microphone stops by itself and the text follows exactly the ✓ path (history first, then insertion at the cursor, otherwise automatic copy to the clipboard), with « Limite de 15 minutes atteinte. » in front of the outcome message. Host-tested only (Robolectric bubble render, limit boundaries, existing pipeline test that the budget stop raises no error). Precise next action: on the phone, one dictation past 15 minutes in Keep: red pill and countdown from 14:00, automatic stop at 15:00, text inserted (or copied) and in the history.
 
 Verified on the phone:
 
@@ -38,7 +38,7 @@ A Linux desktop port of the dictation lives in `linux/` (Python, GTK 4/libadwait
 
 ## Next phone session
 
-**Precise next action.** One sitting of about 30 minutes on the Pixel, with the v0.3.12 APK from the GitHub release. Steps and boxes: [acceptation-pixel.md](acceptation-pixel.md). For each step, if something fails, report the « Diagnostic : … » line and the message under « Durée capturée » (dictation), or the state and message in the « Réunion » tab (meeting).
+**Precise next action.** One sitting of about 30 minutes on the Pixel, with the v0.3.13 APK from the GitHub release. Steps and boxes: [acceptation-pixel.md](acceptation-pixel.md). For each step, if something fails, report the « Diagnostic : … » line and the message under « Durée capturée » (dictation), or the state and message in the « Réunion » tab (meeting).
 
 0. **Model preparation** (v0.3.9): on the updated Pixel, « Modèles prêts » with no download. If a phone or work profile without the model is available, « Préparer » downloads about 670 MB and ends « Modèles prêts ».
 1. **Start of speech and soft speech** (v0.3.7, v0.3.8; items 1 and 2): a short phrase spoken right after the tap, three times; then soft, normal and loud voice in one dictation. Note the diagnostic line each time.
@@ -104,6 +104,7 @@ Procedure: [ci.md](ci.md#releases). Never move a tag whose release exists. Versi
 | 0.3.10 | Stop delay: microphone kept open 0.5 s after ✓ (0–2 s in « Réglages ») so the last words are not cut; same setting on Linux. Host-tested only |
 | 0.3.11 | Meeting: stop no longer starts the transcription (explicit « Transcrire »), automatic gain at transcription (none/+6/+12/+18 dB, recording kept raw), live level bars while recording. Host-tested only |
 | 0.3.12 | Meeting: optional chaining at the 2-hour limit (off by default), visible notification with status-bar icon and chronometer opening « Réunion »; bubble drop-on-✕ fixed. Host-tested only |
+| 0.3.13 | Dictation: red pill and countdown during the last minute; automatic stop at 15:00 announced, text inserted or copied as with ✓. Host-tested only |
 
 ## Agreed scope
 
